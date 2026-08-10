@@ -60,94 +60,31 @@ export const TelegramFrame: React.FC<TelegramFrameProps> = ({
           {showUserDropdown && (
             <div className="absolute left-0 mt-2 w-72 max-h-[80vh] overflow-y-auto bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl z-50 p-3 backdrop-blur-xl">
               <div className="text-[10px] uppercase font-extrabold text-cyan-400 px-1 mb-1.5 tracking-wider flex items-center justify-between">
-                <span>Direct TG Username Login</span>
-                <span className="text-[9px] bg-cyan-950 text-cyan-300 px-1.5 py-0.5 rounded border border-cyan-800">Auto Detect</span>
+                <span>Active Account Profile</span>
+                <span className="text-[9px] bg-emerald-950 text-emerald-300 px-1.5 py-0.5 rounded border border-emerald-800">Verified TG Session</span>
               </div>
 
-              {/* Direct Username Input Login */}
-              <form
-                onSubmit={async (e) => {
-                  e.preventDefault();
-                  const target = e.currentTarget;
-                  const input = target.elements.namedItem('tgInput') as HTMLInputElement;
-                  if (!input || !input.value.trim()) return;
-                  const val = input.value.trim();
-                  try {
-                    const { api } = await import('../services/api');
-                    const isNumeric = /^\d+$/.test(val);
-                    const res = await api.loginUser({
-                      telegramId: isNumeric ? val : `tg_${Date.now()}`,
-                      username: isNumeric ? `user_${val}` : val.replace(/^@/, ''),
-                      firstName: val.replace(/^@/, '')
-                    });
-                    if (res && res.id) {
-                      onSelectUser(res);
-                      setShowUserDropdown(false);
-                      input.value = '';
-                    }
-                  } catch (err) {
-                    console.error('Login error:', err);
-                  }
-                }}
-                className="mb-3"
-              >
-                <div className="flex gap-1.5">
-                  <input
-                    name="tgInput"
-                    type="text"
-                    placeholder="Enter @username or TG ID..."
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-1.5 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-cyan-500"
-                  />
-                  <button
-                    type="submit"
-                    className="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold px-3 py-1.5 rounded-xl text-xs shrink-0 shadow"
-                  >
-                    Login
-                  </button>
+              {/* Account Details Card */}
+              <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 mb-2 space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-100">{currentUser.firstName}</span>
+                  {getRoleBadge(currentUser.role)}
                 </div>
-              </form>
-
-              <div className="text-[10px] uppercase font-bold text-slate-500 px-1 py-1 tracking-wider border-t border-slate-800 pt-2">
-                Profiles in Memory
-              </div>
-              <div className="max-h-48 overflow-y-auto space-y-1 pr-1">
-                {users.map((u) => (
-                  <button
-                    key={u.id}
-                    onClick={() => {
-                      onSelectUser(u);
-                      setShowUserDropdown(false);
-                    }}
-                    className={`w-full flex items-center justify-between p-2 rounded-xl text-left text-xs transition-colors ${
-                      u.id === currentUser.id ? 'bg-cyan-950/80 text-cyan-300 border border-cyan-800/60 font-medium' : 'hover:bg-slate-800 text-slate-300'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <div className="w-6 h-6 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-[10px] font-bold text-cyan-400">
-                        {u.firstName.charAt(0)}
-                      </div>
-                      <div>
-                        <div className="font-semibold text-slate-200">{u.firstName}</div>
-                        <div className="text-[10px] text-slate-400">@{u.username} • {u.id}</div>
-                      </div>
-                    </div>
-                    {getRoleBadge(u.role)}
-                  </button>
-                ))}
+                <div className="text-[11px] text-slate-400">Username: @{currentUser.username}</div>
+                <div className="text-[10px] font-mono text-slate-500">TG ID: {currentUser.id}</div>
               </div>
 
-              {currentUser.role !== 'USER' && (
-                <button
-                  onClick={() => {
-                    onSelectMode('admin');
-                    setShowUserDropdown(false);
-                  }}
-                  className="w-full mt-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-extrabold p-2 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-md transition-all active:scale-98"
-                >
-                  <Shield className="w-4 h-4 text-slate-950" />
-                  <span>🔑 Admin / CEO Security Access</span>
-                </button>
-              )}
+              {/* Only show Admin Security Access if admin or if attempting admin unlock */}
+              <button
+                onClick={() => {
+                  onSelectMode('admin');
+                  setShowUserDropdown(false);
+                }}
+                className="w-full mt-1 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-extrabold p-2.5 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-md transition-all active:scale-98"
+              >
+                <Shield className="w-4 h-4 text-slate-950" />
+                <span>🔑 Admin Panel (PIN Security Required)</span>
+              </button>
             </div>
           )}
         </div>

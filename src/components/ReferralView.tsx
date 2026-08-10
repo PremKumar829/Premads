@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { User, SystemSettings } from '../types';
-import { UserPlus, Copy, Share2, Check, Gift, Sparkles, Users, Award, ShieldCheck } from 'lucide-react';
+import { UserPlus, Copy, Share2, Check, Gift, Sparkles, Users, Award, ShieldCheck, Trophy, Crown, Flame, TrendingUp } from 'lucide-react';
 
 interface ReferralViewProps {
   user: User;
@@ -21,6 +21,15 @@ export const ReferralView: React.FC<ReferralViewProps> = ({
 
   // Find referred users
   const myReferrals = allUsers.filter(u => u.referredBy === user.id);
+
+  // Calculate Top 5 Referrers
+  const topReferrers = [...allUsers]
+    .map(u => ({
+      ...u,
+      actualRefCount: Math.max(u.referralCount || 0, allUsers.filter(r => r.referredBy === u.id).length)
+    }))
+    .sort((a, b) => b.actualRefCount - a.actualRefCount || b.referralEarnings - a.referralEarnings || b.totalEarned - a.totalEarned)
+    .slice(0, 5);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(referralLink);

@@ -183,19 +183,46 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const totalPaid = withdrawals.filter(w => w.status === 'APPROVED').reduce((acc, r) => acc + r.amount, 0);
   const totalAdsWatched = users.reduce((acc, u) => acc + (u.watchedAdIds?.length || u.adsWatchedToday || 0), 0);
 
-  // ROLE PROTECTION: Standard USER cannot access Admin Suite
-  if (currentUser.role === 'USER') {
+  // ROLE PROTECTION: Standard USER must enter Admin PIN (7788 or 9999) to elevate and access Admin Suite
+  if (currentUser.role === 'USER' && !isAuthenticated) {
     return (
-      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 text-center max-w-md mx-auto my-12 shadow-2xl space-y-4 font-sans">
-        <div className="w-16 h-16 rounded-3xl bg-rose-950/80 border border-rose-800 text-rose-400 flex items-center justify-center mx-auto shadow-inner">
-          <Lock className="w-8 h-8 text-rose-400" />
+      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 text-center max-w-md mx-auto my-8 shadow-2xl space-y-4 font-sans">
+        <div className="w-16 h-16 rounded-3xl bg-amber-950/80 border border-amber-800/80 text-amber-400 flex items-center justify-center mx-auto shadow-inner">
+          <Shield className="w-8 h-8 text-amber-400" />
         </div>
         <div>
-          <h2 className="text-xl font-black text-white">Access Denied</h2>
-          <p className="text-xs text-slate-400 mt-2 leading-relaxed">
-            The Admin & CEO Executive Panel is strictly protected and hidden from standard user accounts.
+          <h2 className="text-xl font-black text-white">Admin Security Authentication</h2>
+          <p className="text-xs text-slate-400 mt-1.5 leading-relaxed">
+            This Admin Console is hidden from standard users. Enter your Executive Admin Pass PIN to continue.
           </p>
         </div>
+
+        <form onSubmit={handleUnlockAdmin} className="space-y-3 pt-2">
+          <div>
+            <input
+              type="password"
+              value={pinInput}
+              onChange={(e) => setPinInput(e.target.value)}
+              placeholder="Enter Admin Security PIN..."
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-center text-sm font-mono text-amber-400 tracking-widest focus:outline-none focus:border-amber-500 placeholder-slate-600"
+              maxLength={6}
+            />
+            {pinError && (
+              <p className="text-[11px] text-rose-400 font-semibold mt-1.5 flex items-center justify-center gap-1">
+                <AlertCircle className="w-3.5 h-3.5" />
+                <span>{pinError}</span>
+              </p>
+            )}
+          </div>
+
+          <button
+            type="submit"
+            className="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black py-3 rounded-xl text-xs uppercase tracking-wider shadow-lg transition-all active:scale-98 flex items-center justify-center gap-2"
+          >
+            <Key className="w-4 h-4" />
+            <span>Authenticate Admin Access</span>
+          </button>
+        </form>
       </div>
     );
   }
