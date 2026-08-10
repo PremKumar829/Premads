@@ -57,7 +57,7 @@ export const FastGroupView: React.FC<FastGroupViewProps> = ({
   };
 
   return (
-    <div className="space-y-4 pb-6">
+    <div className="space-y-4 pb-16">
       {/* Header */}
       <div className="bg-gradient-to-r from-cyan-950 via-slate-900 to-slate-950 border border-cyan-800/40 rounded-2xl p-4 flex items-center justify-between">
         <div>

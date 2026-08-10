@@ -31,7 +31,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const adLimitProgress = Math.min(100, (user.adsWatchedToday / (settings.dailyAdLimit || 20)) * 100);
 
   return (
-    <div className="space-[#space-y-4] space-y-4 pb-4">
+    <div className="space-y-4 pb-16">
       {/* Welcome Banner */}
       <div className="bg-gradient-to-r from-cyan-950/80 via-slate-900 to-slate-950 border border-cyan-800/40 rounded-2xl p-4 relative overflow-hidden shadow-lg">
         <div className="absolute top-0 right-0 w-32 h-32 bg-cyan-500/10 rounded-full blur-2xl pointer-events-none"></div>

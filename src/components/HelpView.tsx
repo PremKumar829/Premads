@@ -9,7 +9,7 @@ interface HelpViewProps {
 
 export const HelpView: React.FC<HelpViewProps> = ({ settings }) => {
   return (
-    <div className="space-y-4 pb-6">
+    <div className="space-y-4 pb-16">
       {/* Help Banner */}
       <div className="bg-gradient-to-r from-blue-950 via-slate-900 to-slate-950 border border-blue-800/40 rounded-2xl p-4 flex items-center justify-between shadow-xl">
         <div>

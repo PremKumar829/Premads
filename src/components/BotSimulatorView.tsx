@@ -126,7 +126,7 @@ export const BotSimulatorView: React.FC<BotSimulatorViewProps> = ({
   };
 
   return (
-    <div className="flex flex-col h-[650px] bg-[#0e1621] rounded-2xl border border-slate-800 overflow-hidden shadow-2xl font-sans">
+    <div className="flex flex-col h-full min-h-[450px] bg-[#0e1621] rounded-2xl border border-slate-800 overflow-hidden shadow-2xl font-sans">
       {/* Telegram Chat Header */}
       <div className="bg-[#17212b] border-b border-[#0e1621] px-4 py-3 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-3">

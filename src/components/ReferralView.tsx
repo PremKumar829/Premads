@@ -35,7 +35,7 @@ export const ReferralView: React.FC<ReferralViewProps> = ({
   };
 
   return (
-    <div className="space-y-4 pb-6">
+    <div className="space-y-4 pb-16">
       {/* Banner */}
       <div className="bg-gradient-to-r from-purple-950 via-slate-900 to-slate-950 border border-purple-800/40 rounded-2xl p-4 flex items-center justify-between">
         <div>

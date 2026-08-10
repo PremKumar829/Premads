@@ -130,7 +130,7 @@ export const WithdrawView: React.FC<WithdrawViewProps> = ({
   };
 
   return (
-    <div className="space-y-4 pb-6">
+    <div className="space-y-4 pb-16">
       {/* Header Banner */}
       <div className="bg-gradient-to-r from-emerald-950 via-slate-900 to-slate-950 border border-emerald-800/40 rounded-2xl p-4 flex items-center justify-between shadow-xl">
         <div>
