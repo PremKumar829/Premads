@@ -1,0 +1,6 @@
+{
+  "name": "VYRNXY ADS - Watch & Earn Telegram Mini App",
+  "description": "Telegram Mini App & Bot platform for watching Monetag ads, earning money, referring friends, UPI/Bank withdrawals, and managing system settings with an admin panel and fast withdrawal group.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

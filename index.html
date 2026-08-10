@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>VYRNXY ADS - Watch Ads & Earn Rewards Telegram Mini App</title>
+    <!-- Telegram WebApp SDK Error Shield -->
+    <script>
+      (function() {
+        var origConsoleError = console.error;
+        console.error = function() {
+          if (arguments && arguments[0] && typeof arguments[0] === 'string' && (
+            arguments[0].includes('[Telegram.WebApp] CloudStorage is not supported') ||
+            arguments[0].includes('CloudStorage')
+          )) {
+            return;
+          }
+          origConsoleError.apply(console, arguments);
+        };
+
+        window.addEventListener('error', function(event) {
+          if (event && event.message && String(event.message).includes('CloudStorage')) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            return true;
+          }
+        }, true);
+
+        window.addEventListener('unhandledrejection', function(event) {
+          if (event && event.reason && String(event.reason).includes('CloudStorage')) {
+            event.preventDefault();
+          }
+        }, true);
+      })();
+    </script>
+    <!-- Telegram WebApp SDK -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script>
+      (function() {
+        if (window.Telegram && window.Telegram.WebApp) {
+          var tg = window.Telegram.WebApp;
+          try {
+            Object.defineProperty(tg, 'version', { get: function() { return '8.0'; }, configurable: true });
+            tg.isVersionAtLeast = function() { return true; };
+          } catch (e) {}
+
+          var localStorageCS = {
+            setItem: function(k, v, cb) { try { localStorage.setItem('tg_cs_' + k, v); if (cb) cb(null, true); } catch(e) { if (cb) cb(e, false); } return localStorageCS; },
+            getItem: function(k, cb) { try { var val = localStorage.getItem('tg_cs_' + k) || ''; if (cb) cb(null, val); } catch(e) { if (cb) cb(e, ''); } return localStorageCS; },
+            getItems: function(keys, cb) { try { var res = {}; keys.forEach(function(k){ res[k] = localStorage.getItem('tg_cs_' + k) || ''; }); if (cb) cb(null, res); } catch(e) { if (cb) cb(e, {}); } return localStorageCS; },
+            removeItem: function(k, cb) { try { localStorage.removeItem('tg_cs_' + k); if (cb) cb(null, true); } catch(e) { if (cb) cb(e, false); } return localStorageCS; },
+            removeItems: function(keys, cb) { try { keys.forEach(function(k){ localStorage.removeItem('tg_cs_' + k); }); if (cb) cb(null, true); } catch(e) { if (cb) cb(e, false); } return localStorageCS; },
+            getKeys: function(cb) { try { var keys = Object.keys(localStorage).filter(function(k){ return k.startsWith('tg_cs_'); }).map(function(k){ return k.replace('tg_cs_', ''); }); if (cb) cb(null, keys); } catch(e) { if (cb) cb(e, []); } return localStorageCS; }
+          };
+
+          try {
+            Object.defineProperty(tg, 'CloudStorage', { get: function() { return localStorageCS; }, configurable: true });
+          } catch (e) {}
+        }
+      })();
+    </script>
+    <!-- Monetag Rewarded Ad Tag for Telegram Mini App Zone 11537959 -->
+    <script src="//libtl.com/sdk.js" data-zone="11537959" data-sdk="show_11537959"></script>
+  </head>
+  <body class="bg-slate-950 text-slate-100 antialiased selection:bg-cyan-500 selection:text-slate-950">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+
