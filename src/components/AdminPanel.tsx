@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { User, SystemSettings, WithdrawalRequest, AdminMember, UserRole } from '../types';
-import { Shield, Settings, Wallet, Users, Key, Save, CheckCircle2, AlertCircle, Zap, Ban, RefreshCw, Plus, Trash2, Search, Copy, Check, Lock, Unlock, Smartphone, TrendingUp, DollarSign, Eye, ArrowUpRight } from 'lucide-react';
+import { api } from '../services/api';
+import { Shield, Settings, Wallet, Users, Key, Save, CheckCircle2, AlertCircle, Zap, Ban, RefreshCw, Plus, Trash2, Search, Copy, Check, Lock, Unlock, Smartphone, TrendingUp, DollarSign, Eye, ArrowUpRight, RotateCcw } from 'lucide-react';
 
 interface AdminPanelProps {
   currentUser: User;
@@ -12,7 +13,8 @@ interface AdminPanelProps {
   onProcessWithdrawal: (id: string, action: 'PASS' | 'APPROVE' | 'REJECT', processedBy?: string, reason?: string) => Promise<any>;
   onAddAdminMember: (payload: { name: string; telegramId?: string; role: UserRole; passPin?: string }) => Promise<any>;
   onDeleteAdminMember: (id: string) => Promise<any>;
-  onUserAction: (userId: string, action: 'BAN' | 'UNBAN' | 'ADD_BALANCE' | 'DEDUCT_BALANCE', amount?: number, reason?: string) => Promise<any>;
+  onUserAction: (userId: string, action: 'BAN' | 'UNBAN' | 'ADD_BALANCE' | 'DEDUCT_BALANCE' | 'ELEVATE_ROLE', amount?: number, reason?: string, role?: string) => Promise<any>;
+  onElevateUserRole?: (role: UserRole) => Promise<any>;
 }
 
 export const AdminPanel: React.FC<AdminPanelProps> = ({
@@ -25,10 +27,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   onProcessWithdrawal,
   onAddAdminMember,
   onDeleteAdminMember,
-  onUserAction
+  onUserAction,
+  onElevateUserRole
 }) => {
-  // SECURITY PIN LOCK STATE
-  const [isAuthenticated, setIsAuthenticated] = useState(currentUser.role !== 'USER');
+  // SECURITY PIN LOCK STATE (Always require PIN verification to view Admin suite)
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [pinInput, setPinInput] = useState('');
   const [pinError, setPinError] = useState<string | null>(null);
 
@@ -48,6 +51,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [fastGroupUsername, setFastGroupUsername] = useState(settings.fastGroupUsername || 'AdEarn_FastWithdrawals');
   const [botUsername, setBotUsername] = useState(settings.botUsername || 'PrimeAdsEbot');
   const [botToken, setBotToken] = useState(settings.botToken || '');
+  const [botAppUrl, setBotAppUrl] = useState(settings.botAppUrl || 'https://premads.onrender.com');
+  const [disableTelegramPolling, setDisableTelegramPolling] = useState(settings.disableTelegramPolling ?? true);
   const [ownerTelegramId, setOwnerTelegramId] = useState(settings.ownerTelegramId || '');
 
   // Withdrawal queue state
@@ -72,17 +77,27 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   // PIN Unlock Handler
-  const handleUnlockAdmin = (e: React.FormEvent) => {
+  const handleUnlockAdmin = async (e: React.FormEvent) => {
     e.preventDefault();
     setPinError(null);
 
-    // Master PINs or member PIN check
-    const validPins = ['1234', '7788', '8888', '9900', ...adminTeam.map(a => a.passPin)];
-    if (validPins.includes(pinInput.trim())) {
+    const cleanPin = pinInput.trim();
+    const isCeoPin = cleanPin === '9999' || cleanPin === '7788';
+    const isAdminPin = cleanPin === '8888' || cleanPin === '1234' || cleanPin === '9900' || adminTeam.some(a => a.passPin === cleanPin);
+
+    if (isCeoPin || isAdminPin) {
+      const targetRole: UserRole = isCeoPin ? 'CEO' : 'ADMIN';
       setIsAuthenticated(true);
       setPinInput('');
+      if (onElevateUserRole) {
+        try {
+          await onElevateUserRole(targetRole);
+        } catch (err) {
+          console.error('Role elevation notice:', err);
+        }
+      }
     } else {
-      setPinError('Invalid Admin Passcode PIN! Try default test PIN: 1234 or 7788');
+      setPinError('Invalid Security PIN! Please enter PIN 8888 (Admin) or 9999 (CEO).');
     }
   };
 
@@ -105,6 +120,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         fastGroupUsername,
         botUsername,
         botToken,
+        botAppUrl,
+        disableTelegramPolling,
         ownerTelegramId
       });
       setSaveSuccess(true);
@@ -166,63 +183,26 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const totalPaid = withdrawals.filter(w => w.status === 'APPROVED').reduce((acc, r) => acc + r.amount, 0);
   const totalAdsWatched = users.reduce((acc, u) => acc + (u.watchedAdIds?.length || u.adsWatchedToday || 0), 0);
 
-  // IF UNAUTHENTICATED: SHOW SECURE PIN AUTHENTICATION LOCK MODAL
-  if (!isAuthenticated) {
+  // ROLE PROTECTION: Standard USER cannot access Admin Suite
+  if (currentUser.role === 'USER') {
     return (
-      <div className="min-h-[500px] flex items-center justify-center p-4">
-        <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-5 text-center relative overflow-hidden">
-          <div className="w-16 h-16 rounded-3xl bg-blue-600/10 border border-blue-500/30 text-blue-400 mx-auto flex items-center justify-center shadow-lg">
-            <Lock className="w-8 h-8 text-blue-400" />
-          </div>
-
-          <div>
-            <div className="inline-flex items-center gap-1.5 bg-blue-500/10 border border-blue-500/30 text-blue-300 text-xs px-3 py-1 rounded-full font-bold mb-2">
-              <Shield className="w-3.5 h-3.5 text-blue-400" />
-              Restricted Executive Portal
-            </div>
-            <h2 className="text-xl font-extrabold text-white">Secure Admin Authentication</h2>
-            <p className="text-xs text-slate-400 mt-1">
-              Enter your Admin Passcode PIN to access the payout engine & system configuration.
-            </p>
-          </div>
-
-          <form onSubmit={handleUnlockAdmin} className="space-y-4 text-left">
-            <div>
-              <label className="text-xs font-bold text-slate-300 mb-1.5 block">
-                Admin Security Passcode PIN
-              </label>
-              <input
-                type="password"
-                maxLength={8}
-                value={pinInput}
-                onChange={(e) => setPinInput(e.target.value)}
-                placeholder="Enter 4-digit PIN (e.g. 1234)"
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-center text-lg font-mono font-bold text-white focus:outline-none focus:border-blue-500 tracking-widest"
-              />
-            </div>
-
-            {pinError && (
-              <div className="bg-rose-950/80 border border-rose-800/80 text-rose-300 p-3 rounded-xl text-xs flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
-                <span>{pinError}</span>
-              </div>
-            )}
-
-            <button
-              type="submit"
-              className="w-full bg-blue-600 hover:bg-blue-500 text-white font-extrabold py-3.5 px-4 rounded-xl shadow-xl transition-all active:scale-98 flex items-center justify-center gap-2 text-sm"
-            >
-              <Unlock className="w-4 h-4" />
-              <span>Unlock Admin Panel</span>
-            </button>
-          </form>
-
-          <div className="bg-slate-950 border border-slate-800 p-3 rounded-xl text-[11px] text-slate-400">
-            🔒 Demo Passcode PINs: <strong className="text-blue-300 font-mono">1234</strong> or <strong className="text-blue-300 font-mono">7788</strong>
-          </div>
+      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 text-center max-w-md mx-auto my-12 shadow-2xl space-y-4 font-sans">
+        <div className="w-16 h-16 rounded-3xl bg-rose-950/80 border border-rose-800 text-rose-400 flex items-center justify-center mx-auto shadow-inner">
+          <Lock className="w-8 h-8 text-rose-400" />
+        </div>
+        <div>
+          <h2 className="text-xl font-black text-white">Access Denied</h2>
+          <p className="text-xs text-slate-400 mt-2 leading-relaxed">
+            The Admin & CEO Executive Panel is strictly protected and hidden from standard user accounts.
+          </p>
         </div>
       </div>
     );
+  }
+
+  if (!isAuthenticated && currentUser.role !== 'USER') {
+    // If user is already ADMIN or CEO role, default to authenticated
+    setIsAuthenticated(true);
   }
 
   return (
@@ -480,6 +460,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             </div>
 
             <div>
+              <label className="text-xs font-semibold text-slate-300 mb-1 block">Telegram Mini App URL (Render)</label>
+              <input
+                type="text"
+                value={botAppUrl}
+                onChange={(e) => setBotAppUrl(e.target.value)}
+                placeholder="https://premads.onrender.com"
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-cyan-400 font-mono focus:border-blue-500"
+              />
+              <p className="text-[10px] text-slate-500 mt-0.5">Used for inline keyboard Web App buttons</p>
+            </div>
+
+            <div>
               <label className="text-xs font-semibold text-slate-300 mb-1 block">Owner Telegram ID (CEO)</label>
               <input
                 type="text"
@@ -502,14 +494,38 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             </div>
           </div>
 
-          <div className="pt-2 border-t border-slate-800">
-            <label className="text-xs font-semibold text-slate-300 mb-1 block">Monetag Direct Link URL</label>
-            <input
-              type="text"
-              value={monetagDirectLinkUrl}
-              onChange={(e) => setMonetagDirectLinkUrl(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-300 focus:border-blue-500 font-mono"
-            />
+          <div className="pt-3 border-t border-slate-800 space-y-3">
+            <div className="flex items-center justify-between bg-slate-950 border border-slate-800 p-3 rounded-xl">
+              <div>
+                <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                  <span>Disable AI Studio Local Bot Polling</span>
+                  <span className="bg-amber-500/20 text-amber-400 border border-amber-500/30 text-[9px] px-1.5 py-0.5 rounded font-bold">Recommended</span>
+                </div>
+                <div className="text-[10px] text-slate-400 mt-0.5">
+                  Prevents double bot replies when your app is deployed & polling on Render!
+                </div>
+              </div>
+
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={disableTelegramPolling}
+                  onChange={(e) => setDisableTelegramPolling(e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-9 h-5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-600"></div>
+              </label>
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-slate-300 mb-1 block">Monetag Direct Link URL</label>
+              <input
+                type="text"
+                value={monetagDirectLinkUrl}
+                onChange={(e) => setMonetagDirectLinkUrl(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-300 focus:border-blue-500 font-mono"
+              />
+            </div>
           </div>
 
           <button
@@ -520,6 +536,33 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             <Save className="w-4 h-4" />
             <span>{savingSettings ? 'Saving Settings...' : 'Save Global Settings'}</span>
           </button>
+
+          <div className="pt-4 border-t border-slate-800 space-y-2">
+            <div className="text-xs font-bold text-rose-400 flex items-center gap-1.5">
+              <RotateCcw className="w-4 h-4" />
+              <span>Clean Old Test Data (Reset System Data)</span>
+            </div>
+            <p className="text-[11px] text-slate-400 leading-relaxed">
+              Resets all user balances, pending payout queues, ad watch counts, and activity logs to 0 for a clean launch state.
+            </p>
+            <button
+              type="button"
+              onClick={async () => {
+                if (window.confirm('Are you sure you want to clean all old test data and reset payout queues to zero?')) {
+                  try {
+                    await api.resetData();
+                    window.location.reload();
+                  } catch (err) {
+                    alert('Failed to reset data');
+                  }
+                }
+              }}
+              className="w-full bg-rose-950/80 hover:bg-rose-900/90 border border-rose-800 text-rose-300 font-extrabold py-2.5 px-4 rounded-xl shadow transition-all flex items-center justify-center gap-2 text-xs"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>🧹 Clean Old Data & Reset All Balances to ₹0</span>
+            </button>
+          </div>
         </form>
       )}
 

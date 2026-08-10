@@ -135,6 +135,19 @@ export const TelegramFrame: React.FC<TelegramFrameProps> = ({
                   </button>
                 ))}
               </div>
+
+              {currentUser.role !== 'USER' && (
+                <button
+                  onClick={() => {
+                    onSelectMode('admin');
+                    setShowUserDropdown(false);
+                  }}
+                  className="w-full mt-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-extrabold p-2 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-md transition-all active:scale-98"
+                >
+                  <Shield className="w-4 h-4 text-slate-950" />
+                  <span>🔑 Admin / CEO Security Access</span>
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -165,31 +178,33 @@ export const TelegramFrame: React.FC<TelegramFrameProps> = ({
             <span>Bot Chat</span>
           </button>
 
-          <button
-            onClick={() => onSelectMode('fastgroup')}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg font-medium transition-all ${
-              activeAppMode === 'fastgroup'
-                ? 'bg-cyan-500 text-slate-950 font-semibold shadow-md'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <MessageSquare className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">#1 Group</span>
-            <span className="sm:hidden">#1</span>
-          </button>
-
           {currentUser.role !== 'USER' && (
-            <button
-              onClick={() => onSelectMode('admin')}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg font-medium transition-all ${
-                activeAppMode === 'admin'
-                  ? 'bg-cyan-500 text-slate-950 font-semibold shadow-md'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <Shield className="w-3.5 h-3.5 text-amber-300" />
-              <span>Admin</span>
-            </button>
+            <>
+              <button
+                onClick={() => onSelectMode('fastgroup')}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg font-medium transition-all ${
+                  activeAppMode === 'fastgroup'
+                    ? 'bg-cyan-500 text-slate-950 font-semibold shadow-md'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <MessageSquare className="w-3.5 h-3.5 text-emerald-400" />
+                <span className="hidden sm:inline">#1 Group</span>
+                <span className="sm:hidden">#1</span>
+              </button>
+
+              <button
+                onClick={() => onSelectMode('admin')}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg font-medium transition-all ${
+                  activeAppMode === 'admin'
+                    ? 'bg-amber-500 text-slate-950 font-extrabold shadow-md'
+                    : 'text-amber-400 hover:text-amber-200 border border-amber-500/30 bg-amber-500/10'
+                }`}
+              >
+                <Shield className="w-3.5 h-3.5" />
+                <span>Admin</span>
+              </button>
+            </>
           )}
         </div>
       </div>

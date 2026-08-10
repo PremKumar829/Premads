@@ -1,4 +1,4 @@
-export type UserRole = 'CEO' | 'MANAGER' | 'WITHDRAWAL_PASS' | 'USER';
+export type UserRole = 'CEO' | 'ADMIN' | 'MANAGER' | 'WITHDRAWAL_PASS' | 'USER';
 
 export type WithdrawalMethod = 'UPI' | 'BANK';
 
@@ -32,6 +32,8 @@ export interface SystemSettings {
   fastGroupUsername: string;       // Default: "AdEarn_FastWithdrawals"
   botUsername: string;             // Default: "PrimeAdsEbot"
   botToken?: string;               // e.g. "7890123456:AAFx..." from BotFather
+  botAppUrl?: string;              // e.g. "https://premads.onrender.com"
+  disableTelegramPolling?: boolean;// Turn off AI Studio polling to prevent double replies when deployed on Render
   ownerTelegramId?: string;        // e.g. "826258444"
 }
 

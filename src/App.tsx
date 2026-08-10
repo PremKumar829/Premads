@@ -247,6 +247,19 @@ export default function App() {
     setUsers(freshUsers);
   };
 
+  // Elevate current user role upon PIN verification
+  const handleElevateUserRole = async (newRole: any) => {
+    try {
+      await api.userAction(currentUser.id, 'ELEVATE_ROLE', undefined, undefined, newRole);
+      const updatedUser = { ...currentUser, role: newRole };
+      setCurrentUser(updatedUser);
+      setUsers(prev => prev.map(u => u.id === currentUser.id ? updatedUser : u));
+    } catch (e) {
+      console.warn('Backend elevation notice, setting active role locally:', e);
+      setCurrentUser(prev => ({ ...prev, role: newRole }));
+    }
+  };
+
   const isAdmin = currentUser.role !== 'USER';
   const unreadNotification = currentUser.notifications?.find(n => !n.read);
 
@@ -265,7 +278,6 @@ export default function App() {
         onSelectUser={handleSelectUser}
         activeAppMode={activeAppMode}
         onSelectMode={(mode) => {
-          if (mode === 'admin' && currentUser.role === 'USER') return;
           setActiveAppMode(mode);
           if (mode === 'admin') setActiveTab('admin');
         }}
@@ -328,6 +340,7 @@ export default function App() {
                   onAddAdminMember={handleAddAdminMember}
                   onDeleteAdminMember={handleDeleteAdminMember}
                   onUserAction={handleUserAction}
+                  onElevateUserRole={handleElevateUserRole}
                 />
               )}
             </div>
@@ -335,7 +348,6 @@ export default function App() {
             <Navigation
               activeTab={activeTab}
               onTabChange={(t) => {
-                if (t === 'admin' && currentUser.role === 'USER') return;
                 setActiveTab(t);
               }}
               isAdmin={isAdmin}
@@ -358,7 +370,7 @@ export default function App() {
       )}
 
       {/* MODE 3: PRIVATE FAST APPROVAL GROUP (#1 HASHTAG COMMAND) */}
-      {activeAppMode === 'fastgroup' && (
+      {activeAppMode === 'fastgroup' && currentUser.role !== 'USER' && (
         <FastGroupView
           currentUser={currentUser}
           settings={settings}
@@ -370,7 +382,7 @@ export default function App() {
       )}
 
       {/* MODE 4: FULL ADMIN SUITE */}
-      {activeAppMode === 'admin' && (
+      {activeAppMode === 'admin' && currentUser.role !== 'USER' && (
         <AdminPanel
           currentUser={currentUser}
           settings={settings}
@@ -382,6 +394,7 @@ export default function App() {
           onAddAdminMember={handleAddAdminMember}
           onDeleteAdminMember={handleDeleteAdminMember}
           onUserAction={handleUserAction}
+          onElevateUserRole={handleElevateUserRole}
         />
       )}
     </TelegramFrame>

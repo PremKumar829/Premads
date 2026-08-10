@@ -74,11 +74,11 @@ export const api = {
     return await res.json();
   },
 
-  userAction: async (userId: string, action: 'BAN' | 'UNBAN' | 'ADD_BALANCE' | 'DEDUCT_BALANCE', amount?: number, reason?: string) => {
+  userAction: async (userId: string, action: 'BAN' | 'UNBAN' | 'ADD_BALANCE' | 'DEDUCT_BALANCE' | 'ELEVATE_ROLE', amount?: number, reason?: string, role?: string) => {
     const res = await fetch(`/api/users/${userId}/action`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action, amount, reason })
+      body: JSON.stringify({ action, amount, reason, role })
     });
     if (!res.ok) throw new Error('Failed to perform user action');
     return await res.json();
@@ -190,5 +190,11 @@ export const api = {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Failed to send message');
     return data;
+  },
+
+  resetData: async () => {
+    const res = await fetch('/api/admin/reset-data', { method: 'POST' });
+    if (!res.ok) throw new Error('Failed to reset system data');
+    return await res.json();
   }
 };

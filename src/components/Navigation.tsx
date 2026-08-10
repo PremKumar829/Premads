@@ -86,12 +86,12 @@ export const Navigation: React.FC<NavigationProps> = ({
           onClick={() => onTabChange('admin')}
           className={`flex flex-col items-center gap-1 py-1 px-2.5 rounded-xl transition-all ${
             activeTab === 'admin'
-              ? 'text-cyan-400 font-bold bg-cyan-950/40 border border-cyan-800/30'
-              : 'text-slate-400 hover:text-slate-200'
+              ? 'text-amber-400 font-bold bg-amber-950/40 border border-amber-800/40'
+              : 'text-amber-400/80 hover:text-amber-200'
           }`}
         >
           <Shield className="w-4 h-4 sm:w-5 sm:h-5 text-amber-400" />
-          <span className="text-[10px] sm:text-[11px] text-amber-300">Admin</span>
+          <span className="text-[10px] sm:text-[11px] text-amber-300 font-semibold">Admin</span>
         </button>
       )}
     </div>

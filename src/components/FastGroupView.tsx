@@ -28,6 +28,12 @@ export const FastGroupView: React.FC<FastGroupViewProps> = ({
   const handleSend = async () => {
     if (!inputText.trim()) return;
     const txt = inputText.trim();
+
+    if (txt.startsWith(hashtag) && currentUser.role === 'USER') {
+      alert("⚠️ Access Denied: Only Admins & CEO can execute withdrawal pass commands!");
+      return;
+    }
+
     setInputText('');
     setSubmitting(true);
     try {
@@ -118,22 +124,28 @@ export const FastGroupView: React.FC<FastGroupViewProps> = ({
 
                   <div className="flex items-center gap-1.5">
                     {req.status === 'PENDING' ? (
-                      <>
-                        <button
-                          onClick={() => onProcessWithdrawal(req.id, 'PASS', `${currentUser.firstName} (${currentUser.role})`)}
-                          className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold px-2.5 py-1 rounded-lg text-[10px] flex items-center gap-1 transition-all active:scale-95 shadow"
-                        >
-                          <Zap className="w-3 h-3 fill-slate-950" />
-                          <span>PASS</span>
-                        </button>
+                      currentUser.role !== 'USER' ? (
+                        <>
+                          <button
+                            onClick={() => onProcessWithdrawal(req.id, 'PASS', `${currentUser.firstName} (${currentUser.role})`)}
+                            className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold px-2.5 py-1 rounded-lg text-[10px] flex items-center gap-1 transition-all active:scale-95 shadow"
+                          >
+                            <Zap className="w-3 h-3 fill-slate-950" />
+                            <span>PASS</span>
+                          </button>
 
-                        <button
-                          onClick={() => onProcessWithdrawal(req.id, 'REJECT', `${currentUser.firstName} (${currentUser.role})`, 'Rejected by admin in group')}
-                          className="bg-rose-950 hover:bg-rose-900 text-rose-300 border border-rose-800 px-2 py-1 rounded-lg text-[10px] transition-all"
-                        >
-                          Reject
-                        </button>
-                      </>
+                          <button
+                            onClick={() => onProcessWithdrawal(req.id, 'REJECT', `${currentUser.firstName} (${currentUser.role})`, 'Rejected by admin in group')}
+                            className="bg-rose-950 hover:bg-rose-900 text-rose-300 border border-rose-800 px-2 py-1 rounded-lg text-[10px] transition-all"
+                          >
+                            Reject
+                          </button>
+                        </>
+                      ) : (
+                        <span className="text-[10px] text-amber-400 bg-amber-950/60 border border-amber-800/60 px-2 py-0.5 rounded flex items-center gap-1 font-bold">
+                          🔒 Admin Only
+                        </span>
+                      )
                     ) : (
                       <span
                         className={`px-2 py-0.5 rounded text-[10px] font-bold ${

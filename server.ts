@@ -15,7 +15,9 @@ import { SystemSettings, User, WithdrawalRequest, AdminMember, GroupMessage, AdW
 let settings: SystemSettings = {
   ...initialSettings,
   botToken: process.env.TELEGRAM_BOT_TOKEN || initialSettings.botToken,
-  ownerTelegramId: process.env.OWNER_TELEGRAM_ID || initialSettings.ownerTelegramId
+  ownerTelegramId: process.env.OWNER_TELEGRAM_ID || initialSettings.ownerTelegramId,
+  botAppUrl: process.env.APP_URL || initialSettings.botAppUrl || 'https://premads.onrender.com',
+  disableTelegramPolling: process.env.DISABLE_TELEGRAM_POLLING ? process.env.DISABLE_TELEGRAM_POLLING === 'true' : true
 };
 let users: User[] = [...initialUsers];
 let adminTeam: AdminMember[] = [...initialAdminTeam];
@@ -93,7 +95,7 @@ async function handleTelegramUpdate(update: any) {
     }
   }
 
-  const appUrl = process.env.APP_URL || 'https://ais-dev-mqwiqyelwqvwrnf4hmgmfw-826258444941.asia-southeast1.run.app';
+  const appUrl = settings.botAppUrl || process.env.APP_URL || 'https://premads.onrender.com';
 
   const keyboard = {
     inline_keyboard: [
@@ -172,7 +174,7 @@ async function pollTelegramUpdates() {
   isPolling = true;
 
   while (isPolling) {
-    if (!settings.botToken || settings.botToken === 'YOUR_BOT_TOKEN_HERE') {
+    if (settings.disableTelegramPolling || process.env.DISABLE_TELEGRAM_POLLING === 'true' || !settings.botToken || settings.botToken === 'YOUR_BOT_TOKEN_HERE') {
       await new Promise(r => setTimeout(r, 4000));
       continue;
     }
@@ -729,6 +731,18 @@ ${methodDesc}
       groupMessages.push(userMsg);
 
       if (reqId && (actionCmd === 'PASS' || actionCmd === 'APPROVE' || actionCmd === 'REJECT')) {
+        if (senderRole === 'USER') {
+          groupMessages.push({
+            id: `msg_${Date.now() + 1}`,
+            sender: "Fast Approval Security Guard",
+            senderRole: "SYSTEM",
+            text: `⚠️ **ACCESS DENIED:** User \`${sender}\` is not authorized. Withdrawal pass commands can only be executed by Admins & CEO.`,
+            timestamp: new Date().toISOString(),
+            isSystemNotification: true
+          });
+          return res.json({ success: true, message: "Logged, command blocked for USER role." });
+        }
+
         const reqItem = withdrawalRequests.find(r => r.id === reqId);
         if (!reqItem) {
           groupMessages.push({
@@ -806,6 +820,16 @@ ${methodDesc}
     res.json({ success: true, message: msg });
   });
 
+  // RESET ALL DATA TO CLEAN ZERO STATE
+  app.post("/api/admin/reset-data", (req, res) => {
+    users = [...initialUsers];
+    withdrawalRequests = [...initialWithdrawalRequests];
+    groupMessages = [...initialGroupMessages];
+    adWatchLogs = [...initialAdWatchLogs];
+    adminTeam = [...initialAdminTeam];
+    res.json({ success: true, message: "System data reset to clean initial state" });
+  });
+
   // USER MANAGEMENT ACTIONS
   app.post("/api/users/:id/action", (req, res) => {
     const { action, amount, reason } = req.body;
@@ -816,6 +840,9 @@ ${methodDesc}
       user.isBanned = true;
     } else if (action === 'UNBAN') {
       user.isBanned = false;
+    } else if (action === 'ELEVATE_ROLE') {
+      const newRole = req.body.role || 'ADMIN';
+      user.role = newRole;
     } else if (action === 'ADD_BALANCE') {
       user.balance += Number(amount) || 0;
       user.totalEarned += Number(amount) || 0;
