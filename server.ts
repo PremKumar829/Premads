@@ -1,6 +1,7 @@
 import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
+import { GoogleGenAI } from "@google/genai";
 import {
   initialSettings,
   initialUsers,
@@ -9,11 +10,12 @@ import {
   initialGroupMessages,
   initialAdWatchLogs
 } from "./src/mockData.js";
-import { SystemSettings, User, WithdrawalRequest, AdminMember, GroupMessage, AdWatchLog } from "./src/types.js";
+import { SystemSettings, User, WithdrawalRequest, AdminMember, GroupMessage, AdWatchLog, TransactionItem, SupportTicket } from "./src/types.js";
 
 // In-Memory Data Store (Persisted across API calls during runtime)
 let settings: SystemSettings = {
   ...initialSettings,
+  minAdsWatchForWithdrawal: initialSettings.minAdsWatchForWithdrawal || 100,
   botToken: process.env.TELEGRAM_BOT_TOKEN || initialSettings.botToken,
   ownerTelegramId: process.env.OWNER_TELEGRAM_ID || initialSettings.ownerTelegramId,
   botAppUrl: process.env.APP_URL || initialSettings.botAppUrl || 'https://premads.onrender.com',
@@ -24,7 +26,56 @@ let adminTeam: AdminMember[] = [...initialAdminTeam];
 let withdrawalRequests: WithdrawalRequest[] = [...initialWithdrawalRequests];
 let groupMessages: GroupMessage[] = [...initialGroupMessages];
 let adWatchLogs: AdWatchLog[] = [...initialAdWatchLogs];
+let supportTickets: SupportTicket[] = [
+  {
+    id: 'ticket_1001',
+    userId: '826258444',
+    userName: 'Prem Sargam',
+    userTelegram: '@premsargam88',
+    issueType: 'UPI / Bank Withdrawal Query',
+    message: 'I submitted a ₹50 withdrawal. Please check and approve my payout request!',
+    status: 'OPEN',
+    createdAt: new Date(Date.now() - 3600000 * 3).toISOString()
+  }
+];
+let transactionsLog: TransactionItem[] = [
+  {
+    id: 'tx_101',
+    userId: '826258444',
+    type: 'DAILY_CHECKIN',
+    title: 'Daily 24H Bonus Claim',
+    coins: 50,
+    amountInr: 0.25,
+    timestamp: new Date(Date.now() - 3600000 * 2).toISOString(),
+    description: 'Claimed 24-hour streak login reward'
+  },
+  {
+    id: 'tx_102',
+    userId: '826258444',
+    type: 'AD_WATCH',
+    title: 'Monetag Ad Watch Reward',
+    coins: 10,
+    amountInr: 0.05,
+    timestamp: new Date(Date.now() - 3600000).toISOString(),
+    description: 'Watched Monetag High eCPM Video Ad'
+  }
+];
 let nextRequestId = 1004;
+
+function addTransaction(userId: string, type: any, title: string, coins: number, amountInr: number, description?: string) {
+  const item: TransactionItem = {
+    id: `tx_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+    userId,
+    type,
+    title,
+    coins,
+    amountInr,
+    timestamp: new Date().toISOString(),
+    description
+  };
+  transactionsLog.unshift(item);
+  return item;
+}
 
 // Telegram Bot Helpers & Polling
 async function sendTelegramMessage(chatId: string | number, text: string, replyMarkup?: any) {
@@ -89,6 +140,20 @@ async function handleTelegramUpdate(update: any) {
       joinedAt: new Date().toISOString()
     };
     users.push(user);
+    addTransaction(user.id, 'GIFT_CLAIM', 'Welcome Joining Bonus', welcomeBonus * 200, welcomeBonus, 'Welcome registration reward credited');
+
+    if (refUser) {
+      if (!refUser.notifications) refUser.notifications = [];
+      refUser.notifications.unshift({
+        id: `notif_${Date.now()}`,
+        type: 'REFERRAL_NEW_JOIN',
+        title: '🎉 New Referral Joined!',
+        message: `User @${user.username} (${user.firstName}) joined via your referral link! Bonus will unlock after 50 ad watches.`,
+        read: false,
+        timestamp: new Date().toISOString()
+      });
+      sendTelegramMessage(refUser.id, `🎉 *New Referral Joined!*\nUser @${user.username} (${user.firstName}) just joined via your link! You will earn ₹${settings.referralReward || 5} bonus + 10% commission when they watch ads.`);
+    }
   } else {
     if (settings.ownerTelegramId && telegramId === settings.ownerTelegramId) {
       user.role = 'CEO';
@@ -106,12 +171,16 @@ async function handleTelegramUpdate(update: any) {
         }
       ],
       [
-        { text: "📺 Watch Ads (+10)", web_app: { url: appUrl } },
-        { text: "💸 Withdraw (UPI)", web_app: { url: appUrl } }
+        { text: "📺 Watch Ads (+10 Coins)", web_app: { url: appUrl } },
+        { text: "🎁 Daily Check-in (+50 Coins)", web_app: { url: appUrl } }
       ],
       [
-        { text: "👥 Refer & Earn (10%)", web_app: { url: appUrl } },
-        { text: "📊 My Balance", web_app: { url: appUrl } }
+        { text: "💸 Withdraw (UPI / Bank)", web_app: { url: appUrl } },
+        { text: "👥 Refer & Earn (10%)", web_app: { url: appUrl } }
+      ],
+      [
+        { text: "📊 My Balance & History", web_app: { url: appUrl } },
+        { text: "🎧 Support & CEO Contact", url: "https://t.me/PremSargam88" }
       ],
       [
         { 
@@ -126,9 +195,10 @@ async function handleTelegramUpdate(update: any) {
     const welcomeText = `👋 *Welcome to @${settings.botUsername || 'PrimeAdsEbot'}!*\n\n` +
       `✨ *Welcome Bonus:* ₹${settings.welcomeBonus || 5}.00 (${((settings.welcomeBonus || 5) * 200).toLocaleString()} Coins) credited to your balance!\n\n` +
       `💰 *Conversion Rate:* 10,000 Coins = ₹50 (10 Coins per Ad)\n` +
-      `📺 *Watch Ads:* Earn 10 Coins (₹0.05) per ad watch.\n` +
-      `👥 *Referral Program:* Earn ₹5 (${(5 * 200).toLocaleString()} Coins) after 50 ads watched + 10% lifetime commission!\n` +
-      `💳 *Withdrawal:* Min ₹50 (10,000 Coins) via Instant UPI / Bank (Requires 100 ads watched).\n\n` +
+      `📺 *Watch Unlimited Ads:* Earn 10 Coins (₹0.05) per ad watch.\n` +
+      `🎁 *Daily Check-in:* Earn 50 Coins (₹0.25) every 24 hours!\n` +
+      `👥 *Referral Program:* Earn ₹5 (${(5 * 200).toLocaleString()} Coins) after 50 ads + 10% lifetime commission!\n` +
+      `💳 *Withdrawal:* Min ₹50 (10,000 Coins) via Instant UPI / Bank (Requires ${settings.minAdsWatchForWithdrawal || 100} ads watched).\n\n` +
       `Tap below to launch the Mini App and start earning!`;
     await sendTelegramMessage(chatId, welcomeText, keyboard);
   } else if (text === '/balance' || text === '/dashboard') {
@@ -137,30 +207,54 @@ async function handleTelegramUpdate(update: any) {
       `🪙 *Coin Balance:* ${(user.coins || 0).toLocaleString()} Coins (≈ ₹${(user.balance || 0).toFixed(2)})\n` +
       `💵 *Total Earned:* ${(user.totalCoinsEarned || 0).toLocaleString()} Coins (≈ ₹${(user.totalEarned || 0).toFixed(2)})\n` +
       `💸 *Total Withdrawn:* ₹${(user.totalWithdrawn || 0).toFixed(2)}\n` +
-      `📺 *Ads Watched:* ${user.totalAdsWatched || 0} / 100 Minimum Required`;
+      `📺 *Ads Watched:* ${user.totalAdsWatched || 0} / ${settings.minAdsWatchForWithdrawal || 100} Minimum Required`;
     await sendTelegramMessage(chatId, dashText, keyboard);
   } else if (text === '/withdraw') {
-    const adsLeft = Math.max(0, 100 - (user.totalAdsWatched || 0));
+    const minReq = settings.minAdsWatchForWithdrawal || 100;
+    const adsLeft = Math.max(0, minReq - (user.totalAdsWatched || 0));
     const isUnlocked = adsLeft === 0;
     const withdrawText = `💳 *Withdrawal Center*\n\n` +
       `🪙 *Available Balance:* ${(user.coins || 0).toLocaleString()} Coins (≈ ₹${(user.balance || 0).toFixed(2)})\n` +
       `🎯 *Minimum Payout:* 10,000 Coins (₹50)\n` +
-      `📊 *Ads Progress:* ${user.totalAdsWatched || 0} / 100 Watched\n\n` +
+      `📊 *Ads Progress:* ${user.totalAdsWatched || 0} / ${minReq} Watched\n\n` +
       (isUnlocked 
         ? `✅ *Status:* UNLOCKED! Open the Mini App to request instant UPI payout.`
         : `⚠️ *Status:* LOCKED. Watch ${adsLeft} more ads to unlock payout.`);
     await sendTelegramMessage(chatId, withdrawText, keyboard);
   } else if (text === '/refer') {
     const refText = `👥 *AdEarn Referral Program*\n\n` +
-      `Earn bonus when your friend watches 50 ads + get 10% lifetime commission!\n\n` +
+      `Earn ₹5 bonus when your friend watches 50 ads + get 10% lifetime commission on all their ad views!\n\n` +
       `🔗 *Your Referral Link:*\nhttps://t.me/${settings.botUsername || 'PrimeAdsEbot'}?start=ref_${user.id}`;
     await sendTelegramMessage(chatId, refText, keyboard);
+  } else if (text === '/checkin') {
+    const now = Date.now();
+    const cooldown = 24 * 3600 * 1000;
+    if (user.lastCheckInAt && (now - user.lastCheckInAt) < cooldown) {
+      const hoursLeft = Math.ceil((cooldown - (now - user.lastCheckInAt)) / (3600 * 1000));
+      await sendTelegramMessage(chatId, `⏳ *Daily Check-In Claimed!*\nYou already claimed your daily 50 Coins today. Please try again in ${hoursLeft} hours.`, keyboard);
+    } else {
+      user.coins = (user.coins || 0) + 50;
+      user.totalCoinsEarned = (user.totalCoinsEarned || 0) + 50;
+      user.balance = Number((user.coins / 200).toFixed(2));
+      user.totalEarned = Number((user.totalCoinsEarned / 200).toFixed(2));
+      user.lastCheckInAt = now;
+      addTransaction(user.id, 'DAILY_CHECKIN', 'Daily 24H Bonus Claim', 50, 0.25, 'Claimed via Telegram Bot');
+      await sendTelegramMessage(chatId, `🎁 *Daily Bonus Claimed!*\n+50 Coins (₹0.25) credited to your balance! New Balance: ${(user.coins || 0).toLocaleString()} Coins.`, keyboard);
+    }
+  } else if (text === '/support') {
+    const suppText = `🎧 *AdEarn Customer Support*\n\nNeed help with withdrawals, ads, or referrals?\n\n` +
+      `👑 *CEO Direct Contact:* @PremSargam88\n` +
+      `💬 *Official Telegram Channel:* @${settings.fastGroupUsername || 'AdEarn_FastWithdrawals'}\n` +
+      `⚡ *Support Availability:* 24/7 Fast Response`;
+    await sendTelegramMessage(chatId, suppText, keyboard);
   } else {
     const helpText = `🤖 *AdEarn Telegram Bot*\n\nAvailable commands:\n` +
       `/start - Launch Mini App & Welcome Bonus\n` +
       `/balance - Check Coin Balance & Stats\n` +
       `/withdraw - Check Withdrawal Status\n` +
-      `/refer - Get Referral Link\n\n` +
+      `/refer - Get Referral Link\n` +
+      `/checkin - Claim Daily 50 Coins\n` +
+      `/support - Contact CEO & Support\n\n` +
       `Tap below to open the Mini App:`;
     await sendTelegramMessage(chatId, helpText, keyboard);
   }
@@ -226,7 +320,7 @@ async function startServer() {
       id: `msg_${Date.now()}`,
       sender: "System Bot",
       senderRole: "SYSTEM",
-      text: `⚙️ **SYSTEM SETTINGS UPDATED BY ADMIN**\n• Welcome Bonus: ₹${settings.welcomeBonus}\n• Per Ad Reward: ₹${settings.perAdReward}\n• Referral Reward: ₹${settings.referralReward}\n• Min Withdrawal: ₹${settings.minWithdrawal}\n• Commission: ${settings.referralCommissionPct}%`,
+      text: `⚙️ **SYSTEM SETTINGS UPDATED BY CEO**\n• Welcome Bonus: ₹${settings.welcomeBonus}\n• Per Ad Reward: ₹${settings.perAdReward}\n• Referral Reward: ₹${settings.referralReward}\n• Min Withdrawal: ₹${settings.minWithdrawal}\n• Min Ads Watch Required: ${settings.minAdsWatchForWithdrawal}\n• Commission: ${settings.referralCommissionPct}%`,
       timestamp: new Date().toISOString(),
       isSystemNotification: true
     };
@@ -248,6 +342,65 @@ async function startServer() {
     res.json(user);
   });
 
+  // GET USER TRANSACTIONS HISTORY
+  app.get("/api/users/:id/transactions", (req, res) => {
+    const userTx = transactionsLog.filter(t => t.userId === req.params.id);
+    res.json(userTx);
+  });
+
+  // DAILY CHECK-IN ENDPOINT
+  app.post("/api/users/:id/daily-checkin", (req, res) => {
+    const user = users.find(u => u.id === req.params.id);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    if (user.isBanned) {
+      return res.status(403).json({ error: "Account is restricted" });
+    }
+
+    const now = Date.now();
+    const cooldown = 24 * 3600 * 1000; // 24 hours
+    if (user.lastCheckInAt && (now - user.lastCheckInAt) < cooldown) {
+      const remainingMs = cooldown - (now - user.lastCheckInAt);
+      const hoursLeft = Math.floor(remainingMs / (3600 * 1000));
+      const minsLeft = Math.floor((remainingMs % (3600 * 1000)) / (60 * 1000));
+      return res.status(400).json({
+        error: `Daily bonus already claimed! Please wait ${hoursLeft}h ${minsLeft}m for your next check-in.`,
+        remainingMs
+      });
+    }
+
+    const coinsEarned = 50; // 50 Coins = ₹0.25
+    const rewardInr = 0.25;
+
+    user.coins = (user.coins || 0) + coinsEarned;
+    user.totalCoinsEarned = (user.totalCoinsEarned || 0) + coinsEarned;
+    user.balance = Number((user.coins / 200).toFixed(2));
+    user.totalEarned = Number((user.totalCoinsEarned / 200).toFixed(2));
+    user.lastCheckInAt = now;
+
+    addTransaction(user.id, 'DAILY_CHECKIN', '24H Daily Login Reward', coinsEarned, rewardInr, 'Claimed daily check-in bonus');
+
+    if (!user.notifications) user.notifications = [];
+    user.notifications.unshift({
+      id: `notif_${Date.now()}`,
+      type: 'DAILY_CHECKIN',
+      title: '🎁 Daily Check-In Claimed!',
+      message: `+50 Coins (₹0.25) added to your account! Next check-in unlocks in 24 hours.`,
+      amount: rewardInr,
+      read: false,
+      timestamp: new Date().toISOString()
+    });
+
+    res.json({
+      success: true,
+      coinsEarned,
+      rewardEarned: rewardInr,
+      newCoins: user.coins,
+      newBalance: user.balance,
+      lastCheckInAt: user.lastCheckInAt
+    });
+  });
+
   // Register / Login User via Telegram ID or Telegram Username
   app.post("/api/users/login", (req, res) => {
     const { telegramId, username, firstName, referrerId } = req.body;
@@ -262,7 +415,7 @@ async function startServer() {
 
     if (!user) {
       // Create new user with welcome bonus!
-      const welcomeBonus = settings.welcomeBonus || 20;
+      const welcomeBonus = settings.welcomeBonus || 5;
       let refId: string | null = null;
       let referrerUser = null;
 
@@ -277,10 +430,10 @@ async function startServer() {
         id: telegramId || `user_${Date.now()}`,
         username: username || `user_${telegramId}`,
         firstName: firstName || 'User',
-        coins: (settings.welcomeBonus || 5) * 200,
-        totalCoinsEarned: (settings.welcomeBonus || 5) * 200,
-        balance: settings.welcomeBonus || 5,
-        totalEarned: settings.welcomeBonus || 5,
+        coins: welcomeBonus * 200,
+        totalCoinsEarned: welcomeBonus * 200,
+        balance: welcomeBonus,
+        totalEarned: welcomeBonus,
         totalWithdrawn: 0,
         totalAdsWatched: 0,
         adsWatchedToday: 0,
@@ -297,17 +450,27 @@ async function startServer() {
       };
 
       users.push(user);
+      addTransaction(user.id, 'GIFT_CLAIM', 'Welcome Joining Bonus', welcomeBonus * 200, welcomeBonus, 'Welcome registration reward credited');
 
-      // DELAYED REFERRAL BONUS RULE (50+ Ads Watched):
-      // Do NOT credit the referrer immediately upon registration.
-      // The bonus will automatically be credited when this new user completes watching 50 Monetag ads.
       if (referrerUser) {
         const refReward = settings.referralReward || 5;
+        if (!referrerUser.notifications) referrerUser.notifications = [];
+        referrerUser.notifications.unshift({
+          id: `notif_${Date.now()}`,
+          type: 'REFERRAL_NEW_JOIN',
+          title: '🎉 New Referral Joined!',
+          message: `User @${user.username} (${user.firstName}) joined via your referral link! ₹${refReward} bonus will unlock after they watch 50 ads.`,
+          read: false,
+          timestamp: new Date().toISOString()
+        });
+
+        sendTelegramMessage(referrerUser.id, `🎉 *New Referral Joined!*\nUser @${user.username} (${user.firstName}) joined via your referral link! You will earn ₹${refReward} bonus when they watch 50 ads.`);
+
         groupMessages.push({
           id: `msg_${Date.now()}`,
-          sender: "Anti-Fraud Referral Engine",
+          sender: "Referral Engine",
           senderRole: "SYSTEM",
-          text: `👥 **NEW REFERRAL REGISTERED!**\nUser @${user.username} joined via referral link from @${referrerUser.username}.\n⏳ **Delayed Bonus Anti-Fraud:** ₹${refReward} (${refReward * 200} Coins) referral bonus will be credited to @${referrerUser.username} as soon as @${user.username} watches 50 Monetag ads! (Progress: 0/50)`,
+          text: `👥 **NEW REFERRAL REGISTERED!**\nUser @${user.username} joined via referral link from @${referrerUser.username}.\n⏳ **Delayed Bonus Anti-Fraud:** ₹${refReward} (${refReward * 200} Coins) referral bonus will be credited to @${referrerUser.username} as soon as @${user.username} watches 50 Monetag ads!`,
           timestamp: new Date().toISOString(),
           isSystemNotification: true
         });
@@ -337,6 +500,148 @@ async function startServer() {
     res.json({ success: true, message: "Verified! Joined Telegram Fast Withdrawal Group.", hasJoinedFastGroup: true });
   });
 
+  // DAILY CHECK-IN ENDPOINT
+  app.post("/api/users/:id/daily-checkin", (req, res) => {
+    const user = users.find(u => u.id === req.params.id);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    if (user.isBanned) {
+      return res.status(403).json({ error: "Account is restricted" });
+    }
+
+    const now = Date.now();
+    const twentyFourHours = 24 * 60 * 60 * 1000;
+    if (user.lastCheckInAt && (now - user.lastCheckInAt) < twentyFourHours) {
+      const remainingMs = twentyFourHours - (now - user.lastCheckInAt);
+      const hoursLeft = Math.floor(remainingMs / (3600 * 1000));
+      const minsLeft = Math.ceil((remainingMs % (3600 * 1000)) / (60 * 1000));
+      return res.status(400).json({ error: `Daily check-in already claimed! Available again in ${hoursLeft}h ${minsLeft}m.` });
+    }
+
+    const checkInBonusCoins = 100; // 100 coins = ₹0.50
+    const checkInBonusInr = 0.50;
+
+    user.coins = (user.coins || 0) + checkInBonusCoins;
+    user.totalCoinsEarned = (user.totalCoinsEarned || 0) + checkInBonusCoins;
+    user.balance = Number((user.coins / 200).toFixed(2));
+    user.totalEarned = Number((user.totalCoinsEarned / 200).toFixed(2));
+    user.lastCheckInAt = now;
+
+    addTransaction(user.id, 'DAILY_CHECKIN', 'Daily Check-in Bonus', checkInBonusCoins, checkInBonusInr, '24-Hour streak reward claimed');
+
+    if (!user.notifications) user.notifications = [];
+    user.notifications.unshift({
+      id: `notif_${Date.now()}`,
+      type: 'DAILY_CHECKIN',
+      title: '🎁 Daily Check-in Claimed!',
+      message: `You earned 100 Coins (₹0.50) daily streak bonus!`,
+      amount: checkInBonusInr,
+      read: false,
+      timestamp: new Date().toISOString()
+    });
+
+    res.json({
+      success: true,
+      message: "🎉 Daily Check-in claimed! +100 Coins (₹0.50) added to wallet.",
+      coinsEarned: checkInBonusCoins,
+      rewardInr: checkInBonusInr,
+      newCoins: user.coins,
+      newBalance: user.balance,
+      lastCheckInAt: user.lastCheckInAt
+    });
+  });
+
+  // LEADERBOARD ENDPOINT (Top 10 Earners)
+  app.get("/api/leaderboard", (req, res) => {
+    const sorted = [...users]
+      .sort((a, b) => (b.totalEarned || 0) - (a.totalEarned || 0))
+      .slice(0, 10)
+      .map((u, index) => ({
+        rank: index + 1,
+        id: u.id,
+        firstName: u.firstName || 'User',
+        username: u.username ? `@${u.username}` : `ID: ${u.id.substring(0, 5)}...`,
+        totalEarned: u.totalEarned || 0,
+        totalCoinsEarned: u.totalCoinsEarned || (u.totalEarned || 0) * 200,
+        totalAdsWatched: u.totalAdsWatched || 0,
+        referralCount: u.referralCount || 0
+      }));
+
+    res.json(sorted);
+  });
+
+  // GEMINI CLIENT LAZY INITIALIZATION
+  let genAiClient: GoogleGenAI | null = null;
+  function getGeminiClient(): GoogleGenAI {
+    if (!genAiClient) {
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey) {
+        throw new Error("GEMINI_API_KEY environment variable is missing.");
+      }
+      genAiClient = new GoogleGenAI({
+        apiKey,
+        httpOptions: {
+          headers: {
+            'User-Agent': 'aistudio-build'
+          }
+        }
+      });
+    }
+    return genAiClient;
+  }
+
+  // GEMINI AI FAQ ENDPOINT
+  app.post("/api/faq/ask", async (req, res) => {
+    try {
+      const { question } = req.body;
+      if (!question || typeof question !== 'string' || !question.trim()) {
+        return res.status(400).json({ error: "Please provide a valid question." });
+      }
+
+      const ai = getGeminiClient();
+
+      const systemInstruction = `You are Prime Assistant, the official Support & Policy Assistant for VYRNXY ADS, a high-paying Telegram Mini App & Bot platform where users watch Monetag ads to earn coins and convert them to INR for UPI/Bank withdrawals.
+
+App Rules & Official Withdrawal Policies:
+1. Coin Conversion Rate: 200 Coins = ₹1.00 (1 Coin = ₹0.005, 100 Coins = ₹0.50).
+2. Ad Watching Rewards: Watching 1 Monetag ad awards 5 Coins (₹0.025). Daily ad watch rewards accumulate towards milestone bonuses.
+3. Daily Check-in Streak: Claim 100 Coins (₹0.50) once every 24 hours.
+4. Referral Bonus: ₹${settings.referralReward || 2.00} bonus awarded per active friend once they reach their 50th watched ad.
+5. Minimum Withdrawal Threshold: Minimum ₹${settings.minWithdrawal || 10.00} wallet balance required to request cashout.
+6. Minimum Ad Watch Requirement: Users MUST watch at least ${settings.minAdsWatchForWithdrawal || 100} lifetime Monetag ads before submitting their first withdrawal. This prevents automated bot abuse and multi-account farming.
+7. Fast Withdrawal Group Requirement: Users MUST join the official Telegram Fast Withdrawal group (${settings.fastGroupUsername || '@PremAdsGroup'}) to submit withdrawal requests and receive real-time approval status.
+8. Payout Methods: UPI (Google Pay, PhonePe, Paytm, BHIM UPI) and Direct Bank Account Transfer (IFSC + Account Number).
+9. Processing Time: Fast approval group processes requests within 1-2 hours.
+10. Anti-Fraud Policy: Auto-clickers, bot scripts, multiple fake accounts, or VPN proxy usage will result in immediate permanent account suspension and earnings forfeiture.
+
+Answer user questions accurately, politely, and concisely based on these policies. Highlight key rules using bullet points or clean text when applicable. Keep responses structured and clear.`;
+
+      const response = await ai.models.generateContent({
+        model: "gemini-3.6-flash",
+        contents: question.trim(),
+        config: {
+          systemInstruction,
+          temperature: 0.3,
+        }
+      });
+
+      const answer = response.text || "I'm sorry, I couldn't process your question at the moment. Please contact support via Telegram.";
+
+      res.json({
+        success: true,
+        question: question.trim(),
+        answer: answer
+      });
+    } catch (error: any) {
+      console.error("Gemini AI FAQ Error:", error);
+      res.status(500).json({
+        error: error?.message?.includes("GEMINI_API_KEY")
+          ? "AI Assistant is currently configuring key settings. Please try again or check Telegram support."
+          : "Failed to generate AI policy response: " + (error?.message || "Please try again.")
+      });
+    }
+  });
+
   // WATCH AD ENDPOINT
   app.post("/api/users/:id/watch-ad", (req, res) => {
     const userId = req.params.id;
@@ -348,7 +653,7 @@ async function startServer() {
     }
 
     if (user.isBanned) {
-      return res.status(403).json({ error: "User is banned" });
+      return res.status(403).json({ error: `Account is restricted (${user.banType || 'PERMANENT'}). Reason: ${user.banReason || 'Policy violation'}` });
     }
 
     // Ensure arrays and coin properties exist
@@ -356,24 +661,12 @@ async function startServer() {
     if (user.coins === undefined) user.coins = Math.round(user.balance * 200);
     if (user.totalCoinsEarned === undefined) user.totalCoinsEarned = Math.round(user.totalEarned * 200);
 
-    // DUPLICATE CLAIM CHECK: Prevent user from claiming reward for the exact same ad twice!
-    if (adId && user.watchedAdIds.includes(adId)) {
-      return res.status(400).json({
-        error: `Duplicate ad claim blocked! You have already watched ad campaign (${adId}) and received 10 Coins (₹0.05). Please select another active ad.`
-      });
-    }
-
     // Cooldown check
     const now = Date.now();
     const cooldownMs = (settings.adCooldownSec || 10) * 1000;
     if (user.lastAdWatchedAt && (now - user.lastAdWatchedAt) < cooldownMs) {
       const waitSec = Math.ceil((cooldownMs - (now - user.lastAdWatchedAt)) / 1000);
       return res.status(429).json({ error: `Please wait ${waitSec}s before watching the next ad.` });
-    }
-
-    // Daily limit check
-    if (user.adsWatchedToday >= (settings.dailyAdLimit || 50)) {
-      return res.status(400).json({ error: `Daily ad limit (${settings.dailyAdLimit || 50} ads) reached. Come back tomorrow!` });
     }
 
     // Credit ad reward: 1 Ad Watch = 10 Coins = ₹0.05 INR
@@ -388,8 +681,11 @@ async function startServer() {
     user.totalAdsWatched = (user.totalAdsWatched || 0) + 1;
     user.lastAdWatchedAt = now;
 
-    const currentAdId = adId || `AD-AUTO-${Date.now()}`;
+    const currentAdId = adId || `AD-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
     user.watchedAdIds.push(currentAdId);
+
+    // Add to transaction log
+    addTransaction(user.id, 'AD_WATCH', 'Monetag Ad Watch Reward', coinsEarned, inrEarned, `Watched campaign ${currentAdId}`);
 
     // Log ad watch
     const log: AdWatchLog = {
@@ -420,27 +716,21 @@ async function startServer() {
         user.referralBonusCredited = true;
         referralBonusUnlocked = true;
 
+        addTransaction(referrerUser.id, 'REFERRAL_BONUS', 'Referral Active Bonus', refCoins, refBonusAmount, `Referred friend @${user.username} completed 50 ads!`);
+
         // Add notification to inviter's inbox
         if (!referrerUser.notifications) referrerUser.notifications = [];
         referrerUser.notifications.unshift({
           id: `notif_${Date.now()}`,
           type: 'REFERRAL_SUCCESS',
           title: '🎉 Referral Bonus Credited!',
-          message: '🎉 Your referred friend is now active! Referral bonus credited.',
+          message: `Your referred friend @${user.username} watched 50 ads! ₹${refBonusAmount} (${refCoins.toLocaleString()} Coins) bonus credited!`,
           amount: refBonusAmount,
           read: false,
           timestamp: new Date().toISOString()
         });
 
-        // Broadcast notification to group
-        groupMessages.push({
-          id: `msg_${Date.now()}`,
-          sender: "Referral Reward Engine",
-          senderRole: "SYSTEM",
-          text: `🎉 Your referred friend is now active! Referral bonus credited. (@${user.username} reached 50 ads!)`,
-          timestamp: new Date().toISOString(),
-          isSystemNotification: true
-        });
+        sendTelegramMessage(referrerUser.id, `🎉 *Referral Bonus Credited!*\nYour friend @${user.username} watched 50 ads! ₹${refBonusAmount} (${refCoins.toLocaleString()} Coins) bonus credited to your balance!`);
       }
     }
 
@@ -455,6 +745,7 @@ async function startServer() {
         referrer.balance = Number((referrer.coins / 200).toFixed(2));
         referrer.totalEarned = Number((referrer.totalCoinsEarned / 200).toFixed(2));
         referrer.referralEarnings += 0.005;
+        addTransaction(referrer.id, 'COMMISSION', 'Referral 10% Ad Commission', 1, 0.005, `10% commission from @${user.username} ad watch`);
       }
     }
 
@@ -492,11 +783,12 @@ async function startServer() {
       return res.status(403).json({ error: "Account is restricted" });
     }
 
-    // STRICT ANTI-FRAUD RULE: Personal lifetime ad watch count >= 100
+    // STRICT ANTI-FRAUD RULE: Configurable min lifetime ad watch count
+    const minReq = settings.minAdsWatchForWithdrawal || 100;
     const lifetimeAds = user.totalAdsWatched || user.watchedAdIds?.length || 0;
-    if (lifetimeAds < 100) {
+    if (lifetimeAds < minReq) {
       return res.status(400).json({
-        error: `⚠️ Action Required: You must personally watch at least 100 ads to unlock payouts. (Watched: ${lifetimeAds}/100)`
+        error: `⚠️ Action Required: You must personally watch at least ${minReq} ads to unlock payouts. (Watched: ${lifetimeAds}/${minReq})`
       });
     }
 
@@ -521,6 +813,8 @@ async function startServer() {
     const coinsToDeduct = amount * 200;
     user.coins = Math.max(0, (user.coins || 0) - coinsToDeduct);
     user.balance = Number((user.coins / 200).toFixed(2));
+
+    addTransaction(user.id, 'WITHDRAWAL_REQUEST', 'Withdrawal Payout Request', -coinsToDeduct, -amount, `Payout requested via ${method}`);
 
     const reqId = `${nextRequestId++}`;
     const newRequest: WithdrawalRequest = {
@@ -603,6 +897,8 @@ ${methodDesc}
           read: false,
           timestamp: new Date().toISOString()
         });
+
+        sendTelegramMessage(user.id, `⚡ *Withdrawal Approved & Paid!*\nYour payout request #${reqId} of ₹${request.amount.toFixed(2)} has been paid via ${request.method}!`);
       }
 
       // Send group confirmation
@@ -631,6 +927,7 @@ ${methodDesc}
         const coinsRefund = Math.round(request.amount * 200);
         user.coins = (user.coins || 0) + coinsRefund;
         user.balance = Number((user.coins / 200).toFixed(2));
+        addTransaction(user.id, 'WITHDRAWAL_REFUND', 'Withdrawal Refund', coinsRefund, request.amount, `Refund for rejected payout #${reqId}`);
         if (!user.notifications) user.notifications = [];
         user.notifications.unshift({
           id: `notif_${Date.now()}`,
@@ -642,6 +939,8 @@ ${methodDesc}
           read: false,
           timestamp: new Date().toISOString()
         });
+
+        sendTelegramMessage(user.id, `❌ *Withdrawal Rejected*\nYour payout request #${reqId} of ₹${request.amount.toFixed(2)} was rejected and refunded to your balance. Reason: ${rejectionReason || 'Invalid details'}`);
       }
 
       groupMessages.push({
@@ -700,6 +999,85 @@ ${methodDesc}
     res.json({ success: true });
   });
 
+  // SUPPORT TICKETS ENDPOINTS
+  app.get("/api/support-tickets", (req, res) => {
+    const { userId } = req.query;
+    if (userId) {
+      const userTickets = supportTickets.filter(t => t.userId === String(userId));
+      return res.json(userTickets);
+    }
+    res.json(supportTickets);
+  });
+
+  app.post("/api/support-tickets", (req, res) => {
+    const { userId, issueType, message } = req.body;
+    if (!userId || !message) {
+      return res.status(400).json({ error: "User ID and Message are required" });
+    }
+
+    const user = users.find(u => u.id === String(userId));
+    const userName = user ? user.firstName : 'User';
+    const userTelegram = user ? (user.username ? `@${user.username}` : `ID: ${user.id}`) : `ID: ${userId}`;
+
+    const newTicket: SupportTicket = {
+      id: `ticket_${Date.now()}`,
+      userId: String(userId),
+      userName,
+      userTelegram,
+      issueType: issueType || 'General Inquiry',
+      message: message.trim(),
+      status: 'OPEN',
+      createdAt: new Date().toISOString()
+    };
+
+    supportTickets.unshift(newTicket);
+
+    // Alert Admin Telegram if owner Telegram ID is configured
+    if (settings.ownerTelegramId) {
+      sendTelegramMessage(
+        settings.ownerTelegramId,
+        `🎫 *NEW SUPPORT TICKET SUBMITTED*\n*User:* ${userName} (${userTelegram})\n*Issue:* ${newTicket.issueType}\n*Message:* ${newTicket.message}\n\n_Reply via Admin Panel Support section._`
+      );
+    }
+
+    res.json({ success: true, ticket: newTicket });
+  });
+
+  app.post("/api/support-tickets/:id/reply", (req, res) => {
+    const ticketId = req.params.id;
+    const { reply, status, processedBy } = req.body;
+    const ticket = supportTickets.find(t => t.id === ticketId);
+
+    if (!ticket) {
+      return res.status(404).json({ error: "Support ticket not found" });
+    }
+
+    ticket.reply = reply ? reply.trim() : ticket.reply;
+    ticket.status = status || 'RESOLVED';
+    ticket.updatedAt = new Date().toISOString();
+
+    // Add user notification
+    const user = users.find(u => u.id === ticket.userId);
+    if (user) {
+      if (!user.notifications) user.notifications = [];
+      user.notifications.unshift({
+        id: `notif_${Date.now()}`,
+        type: 'SYSTEM_ALERT',
+        title: '🎫 Support Ticket Responded',
+        message: `Your ticket regarding "${ticket.issueType}" was updated by ${processedBy || 'Admin'}: "${reply || 'Resolved'}"`,
+        read: false,
+        timestamp: new Date().toISOString()
+      });
+
+      sendTelegramMessage(
+        user.id,
+        `📩 *Support Ticket Response*\nYour support query for *${ticket.issueType}* has been updated:\n\n*Admin Reply:* ${reply || 'Resolved'}\n*Status:* ${ticket.status}`
+      );
+    }
+
+    res.json({ success: true, ticket });
+  });
+
   // PRIVATE FAST GROUP MESSAGES & HASHTAG COMMAND SIMULATOR
   app.get("/api/admin/fast-group/messages", (req, res) => {
     res.json(groupMessages);
@@ -736,7 +1114,7 @@ ${methodDesc}
             id: `msg_${Date.now() + 1}`,
             sender: "Fast Approval Security Guard",
             senderRole: "SYSTEM",
-            text: `⚠️ **ACCESS DENIED:** User \`${sender}\` is not authorized. Withdrawal pass commands can only be executed by Admins & CEO.`,
+            text: `⚠️ **ACCESS DENIED:** User \`${sender}\` is not authorized. Withdrawal pass commands can only be executed by Admins, CEO & Withdrawal Pass staff.`,
             timestamp: new Date().toISOString(),
             isSystemNotification: true
           });
@@ -788,7 +1166,12 @@ ${methodDesc}
             reqItem.processedAt = new Date().toISOString();
             reqItem.processedBy = sender || 'Pass Admin';
             reqItem.rejectionReason = reason;
-            if (user) user.balance += reqItem.amount;
+            if (user) {
+              const coinsRefund = Math.round(reqItem.amount * 200);
+              user.coins = (user.coins || 0) + coinsRefund;
+              user.balance = Number((user.coins / 200).toFixed(2));
+              addTransaction(user.id, 'WITHDRAWAL_REFUND', 'Withdrawal Refund', coinsRefund, reqItem.amount, `Refunded for rejected request #${reqId}`);
+            }
 
             groupMessages.push({
               id: `msg_${Date.now() + 2}`,
@@ -827,40 +1210,82 @@ ${methodDesc}
     groupMessages = [...initialGroupMessages];
     adWatchLogs = [...initialAdWatchLogs];
     adminTeam = [...initialAdminTeam];
+    transactionsLog = [];
     res.json({ success: true, message: "System data reset to clean initial state" });
   });
 
   // USER MANAGEMENT ACTIONS
   app.post("/api/users/:id/action", (req, res) => {
-    const { action, amount, reason } = req.body;
+    const { action, amount, reason, banType } = req.body;
     const user = users.find(u => u.id === req.params.id);
     if (!user) return res.status(404).json({ error: "User not found" });
 
     if (action === 'BAN') {
       user.isBanned = true;
+      user.banType = banType || 'PERMANENT';
+      user.banReason = reason || 'Violation of platform rules / suspicious activity detected';
+
+      if (!user.notifications) user.notifications = [];
+      user.notifications.unshift({
+        id: `notif_${Date.now()}`,
+        type: 'ACCOUNT_BANNED',
+        title: '🚨 Account Restricted / Banned',
+        message: `Your account has been restricted (${user.banType}). Reason: ${user.banReason}. Contact support @PremSargam88 if you believe this is an error.`,
+        reason: user.banReason,
+        read: false,
+        timestamp: new Date().toISOString()
+      });
+
+      sendTelegramMessage(user.id, `🚨 *Account Restricted*\nYour AdEarn account has been banned (${user.banType}). Reason: ${user.banReason}`);
     } else if (action === 'UNBAN') {
       user.isBanned = false;
+      user.banType = undefined;
+      user.banReason = undefined;
+
+      if (!user.notifications) user.notifications = [];
+      user.notifications.unshift({
+        id: `notif_${Date.now()}`,
+        type: 'ACCOUNT_UNBANNED',
+        title: '✅ Account Restored',
+        message: 'Your account restrictions have been lifted by Admin. You can now watch ads and withdraw earnings normally!',
+        read: false,
+        timestamp: new Date().toISOString()
+      });
+
+      sendTelegramMessage(user.id, `✅ *Account Restored!*\nYour account access has been fully restored by Admin.`);
     } else if (action === 'ELEVATE_ROLE') {
       const newRole = req.body.role || 'ADMIN';
       user.role = newRole;
     } else if (action === 'ADD_BALANCE') {
-      user.balance += Number(amount) || 0;
-      user.totalEarned += Number(amount) || 0;
+      const addVal = Number(amount) || 0;
+      const addCoins = addVal * 200;
+      user.coins = (user.coins || 0) + addCoins;
+      user.totalCoinsEarned = (user.totalCoinsEarned || 0) + addCoins;
+      user.balance = Number((user.coins / 200).toFixed(2));
+      user.totalEarned = Number((user.totalCoinsEarned / 200).toFixed(2));
+
+      addTransaction(user.id, 'ADMIN_ADDITION', 'Admin Bonus Credit', addCoins, addVal, reason || 'Admin manual credit');
     } else if (action === 'DEDUCT_BALANCE') {
       const deductVal = Number(amount) || 0;
-      user.balance = Math.max(0, user.balance - deductVal);
+      const deductCoins = deductVal * 200;
+      user.coins = Math.max(0, (user.coins || 0) - deductCoins);
+      user.balance = Number((user.coins / 200).toFixed(2));
+
+      addTransaction(user.id, 'ADMIN_DEDUCTION', 'Admin Balance Deduction', -deductCoins, -deductVal, reason || 'Policy violation / adjustment');
 
       if (!user.notifications) user.notifications = [];
       user.notifications.unshift({
         id: `notif_${Date.now()}`,
         type: 'BALANCE_DEDUCTED',
         title: '⚠️ Balance Deducted by Admin',
-        message: `₹${deductVal.toFixed(2)} has been deducted from your account balance. Reason: ${reason || 'System adjustment / violation of policy'}`,
+        message: `₹${deductVal.toFixed(2)} (${deductCoins.toLocaleString()} Coins) has been deducted from your balance. Reason: ${reason || 'System adjustment / violation of policy'}`,
         amount: deductVal,
         reason: reason || 'Policy violation / adjustment',
         read: false,
         timestamp: new Date().toISOString()
       });
+
+      sendTelegramMessage(user.id, `⚠️ *Balance Adjustment*\n₹${deductVal.toFixed(2)} (${deductCoins.toLocaleString()} Coins) was deducted from your account. Reason: ${reason || 'System adjustment'}`);
     }
 
     res.json({ success: true, user });

@@ -1,6 +1,19 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { User, SystemSettings, WithdrawalRequest } from '../types';
-import { Wallet, Tv, UserPlus, Gift, ArrowUpRight, TrendingUp, Sparkles, CheckCircle, Clock } from 'lucide-react';
+import { TransactionHistoryModal } from './TransactionHistoryModal';
+import { Wallet, Tv, UserPlus, Gift, ArrowUpRight, TrendingUp, Sparkles, CheckCircle, Clock, History, Users, Coins, Trophy, Award, Target, Flame } from 'lucide-react';
+import { api } from '../services/api';
+
+interface LeaderboardUser {
+  rank: number;
+  id: string;
+  firstName: string;
+  username: string;
+  totalEarned: number;
+  totalCoinsEarned: number;
+  totalAdsWatched: number;
+  referralCount: number;
+}
 
 interface DashboardViewProps {
   user: User;
@@ -20,6 +33,24 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   dailyClaimed
 }) => {
   const [streakClaiming, setStreakClaiming] = useState(false);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [leaderboard, setLeaderboard] = useState<LeaderboardUser[]>([]);
+  const [loadingLeaderboard, setLoadingLeaderboard] = useState(false);
+
+  useEffect(() => {
+    const loadLeaderboard = async () => {
+      setLoadingLeaderboard(true);
+      try {
+        const data = await api.getLeaderboard();
+        setLeaderboard(data);
+      } catch (err) {
+        console.warn('Failed to load leaderboard', err);
+      } finally {
+        setLoadingLeaderboard(false);
+      }
+    };
+    loadLeaderboard();
+  }, []);
 
   // User's withdrawal history
   const userWithdrawals = withdrawals.filter(w => w.userId === user.id);
@@ -103,8 +134,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         </div>
 
+        {/* Earning History Trigger Button */}
+        <button
+          onClick={() => setShowHistoryModal(true)}
+          className="w-full mt-3 bg-slate-950/80 hover:bg-slate-950 border border-slate-800 hover:border-cyan-500/40 text-cyan-300 font-bold py-2 px-3 rounded-xl text-xs flex items-center justify-center gap-2 transition-all shadow-sm"
+        >
+          <History className="w-4 h-4 text-cyan-400" />
+          <span>View Detailed Earning History (Ads, Referrals, Gifts, Deductions)</span>
+        </button>
+
         {/* Main Action Buttons */}
-        <div className="grid grid-cols-2 gap-3 mt-4">
+        <div className="grid grid-cols-2 gap-3 mt-3">
           <button
             onClick={() => onNavigate('watch')}
             className="bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 font-bold py-3 px-4 rounded-xl shadow-lg flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
@@ -156,6 +196,80 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               style={{ width: `${Math.min(100, (((user.totalAdsWatched || 0) / 100) * 100))}%` }}
             ></div>
           </div>
+        </div>
+      </div>
+
+      {/* USER REFERRAL SUMMARY CARD */}
+      <div className="bg-gradient-to-br from-purple-950/60 via-slate-900 to-slate-950 border border-purple-800/40 rounded-2xl p-4 shadow-lg space-y-3 relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-28 h-28 bg-purple-500/10 rounded-full blur-xl pointer-events-none"></div>
+
+        <div className="flex items-center justify-between border-b border-purple-900/40 pb-2.5 relative z-10">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-xl bg-purple-500/20 border border-purple-500/30 flex items-center justify-center text-purple-300">
+              <Users className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="text-xs font-bold text-slate-100 flex items-center gap-1.5">
+                <span>Your Referral Summary</span>
+                <span className="text-[9px] bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded-full border border-purple-500/30 font-extrabold">
+                  {settings.referralCommissionPct}% Commission
+                </span>
+              </h3>
+              <p className="text-[10px] text-slate-400">Earn ₹{settings.referralReward} per invited friend + lifetime ad commission</p>
+            </div>
+          </div>
+
+          <button
+            onClick={() => onNavigate('refer')}
+            className="text-xs text-purple-300 hover:text-purple-200 font-bold bg-purple-900/40 hover:bg-purple-800/60 border border-purple-700/50 px-2.5 py-1 rounded-xl transition-all flex items-center gap-1 active:scale-95 shadow"
+          >
+            <span>Invite</span>
+            <ArrowUpRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2.5 relative z-10">
+          {/* Total Referrals */}
+          <div className="bg-slate-950/70 border border-purple-900/30 rounded-xl p-3 flex flex-col justify-between">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] text-slate-400 font-semibold">Total Referrals</span>
+              <Users className="w-3.5 h-3.5 text-purple-400" />
+            </div>
+            <div className="mt-2 flex items-baseline gap-1">
+              <span className="text-xl font-extrabold text-purple-300">{user.referralCount || 0}</span>
+              <span className="text-[10px] text-slate-400 font-medium">Friends</span>
+            </div>
+            <div className="text-[9px] text-purple-400/80 mt-1">
+              ₹{settings.referralReward} per referral reward
+            </div>
+          </div>
+
+          {/* Total Referral Earnings */}
+          <div className="bg-slate-950/70 border border-emerald-900/30 rounded-xl p-3 flex flex-col justify-between">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] text-slate-400 font-semibold">Referral Earnings</span>
+              <Coins className="w-3.5 h-3.5 text-emerald-400" />
+            </div>
+            <div className="mt-2 flex items-baseline gap-1">
+              <span className="text-xl font-extrabold text-emerald-400">₹{(user.referralEarnings || 0).toFixed(2)}</span>
+            </div>
+            <div className="text-[9px] text-emerald-300/80 mt-1 font-mono">
+              ≈ {((user.referralEarnings || 0) * 200).toLocaleString()} 🪙 Coins
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-purple-950/30 border border-purple-800/30 p-2.5 rounded-xl flex items-center justify-between text-[11px] text-slate-300 relative z-10">
+          <div className="flex items-center gap-1.5">
+            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+            <span>Referral Code: <strong className="font-mono text-amber-300">{user.id}</strong></span>
+          </div>
+          <button
+            onClick={() => onNavigate('refer')}
+            className="text-purple-300 hover:text-white font-bold underline text-[10px]"
+          >
+            Share & Copy Link
+          </button>
         </div>
       </div>
 
@@ -219,7 +333,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       <div className="grid grid-cols-2 gap-3">
         <button
           onClick={() => onNavigate('refer')}
-          className="bg-slate-900/80 hover:bg-slate-800/90 border border-slate-800 p-3.5 rounded-2xl text-left transition-all flex items-start gap-3"
+          className="bg-slate-900/80 hover:bg-slate-800/90 border border-slate-800 p-3.5 rounded-2xl text-left transition-all flex items-start gap-3 cursor-pointer"
         >
           <div className="p-2 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400">
             <UserPlus className="w-5 h-5" />
@@ -232,7 +346,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
         <button
           onClick={() => onNavigate('withdraw')}
-          className="bg-slate-900/80 hover:bg-slate-800/90 border border-slate-800 p-3.5 rounded-2xl text-left transition-all flex items-start gap-3"
+          className="bg-slate-900/80 hover:bg-slate-800/90 border border-slate-800 p-3.5 rounded-2xl text-left transition-all flex items-start gap-3 cursor-pointer"
         >
           <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
             <Wallet className="w-5 h-5" />
@@ -242,6 +356,139 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <div className="text-[11px] text-slate-400 mt-0.5">Fast Approval via #1</div>
           </div>
         </button>
+      </div>
+
+      {/* Task Milestones Progress Card */}
+      <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 space-y-3 shadow-md">
+        <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
+          <div className="flex items-center gap-2">
+            <Target className="w-4 h-4 text-amber-400" />
+            <h3 className="text-xs font-bold text-slate-200">Daily Earning Milestones</h3>
+          </div>
+          <span className="text-[10px] text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20 font-bold">
+            Bonus Multipliers
+          </span>
+        </div>
+
+        <div className="space-y-2.5 text-xs">
+          {/* Milestone 1: First 5 Ads Today */}
+          <div className="bg-slate-950 p-3 rounded-xl border border-slate-800/80 flex items-center justify-between">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-slate-200">Watch 5 Ads Today</span>
+                {user.adsWatchedToday >= 5 ? (
+                  <span className="bg-emerald-500/20 text-emerald-400 text-[9px] px-2 py-0.5 rounded-full font-bold">Completed ✓</span>
+                ) : (
+                  <span className="bg-slate-800 text-slate-400 text-[9px] px-2 py-0.5 rounded-full">{user.adsWatchedToday}/5</span>
+                )}
+              </div>
+              <p className="text-[10px] text-slate-400">Reward: 50 Bonus Coins (₹0.25)</p>
+            </div>
+            <button
+              onClick={() => onNavigate('watch')}
+              className={`px-3 py-1.5 rounded-xl text-[11px] font-bold transition-all ${
+                user.adsWatchedToday >= 5
+                  ? 'bg-emerald-950/60 text-emerald-400 border border-emerald-800/40'
+                  : 'bg-cyan-600 hover:bg-cyan-500 text-white shadow'
+              }`}
+            >
+              {user.adsWatchedToday >= 5 ? 'Done' : 'Watch Ads'}
+            </button>
+          </div>
+
+          {/* Milestone 2: Lifetime Ads Payout Threshold */}
+          <div className="bg-slate-950 p-3 rounded-xl border border-slate-800/80 flex items-center justify-between">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-slate-200">Unlock Payouts ({settings.minAdsWatchForWithdrawal || 100} Ads)</span>
+                {(user.totalAdsWatched || 0) >= (settings.minAdsWatchForWithdrawal || 100) ? (
+                  <span className="bg-emerald-500/20 text-emerald-400 text-[9px] px-2 py-0.5 rounded-full font-bold">Unlocked ⚡</span>
+                ) : (
+                  <span className="bg-amber-500/20 text-amber-400 text-[9px] px-2 py-0.5 rounded-full font-bold">
+                    {user.totalAdsWatched || 0}/{settings.minAdsWatchForWithdrawal || 100}
+                  </span>
+                )}
+              </div>
+              <p className="text-[10px] text-slate-400">Watch ads to enable instant UPI/Bank withdrawals</p>
+            </div>
+            <button
+              onClick={() => onNavigate('withdraw')}
+              className="px-3 py-1.5 bg-purple-900/40 border border-purple-700/50 text-purple-300 hover:text-white rounded-xl text-[11px] font-bold"
+            >
+              Withdraw
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Top Earners Leaderboard Widget */}
+      <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 space-y-3 shadow-md">
+        <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
+          <div className="flex items-center gap-2">
+            <Trophy className="w-4 h-4 text-amber-400" />
+            <h3 className="text-xs font-bold text-slate-200">Top Community Earners</h3>
+          </div>
+          <span className="text-[10px] text-cyan-400 font-semibold flex items-center gap-1">
+            <Flame className="w-3 h-3 text-amber-500 animate-bounce" />
+            Live Rankings
+          </span>
+        </div>
+
+        {loadingLeaderboard ? (
+          <div className="text-center py-4 text-xs text-slate-500">Loading top community earners...</div>
+        ) : leaderboard.length === 0 ? (
+          <div className="text-center py-4 text-xs text-slate-500">No leaderboard entries available yet.</div>
+        ) : (
+          <div className="space-y-2">
+            {leaderboard.map((u) => {
+              const isGold = u.rank === 1;
+              const isSilver = u.rank === 2;
+              const isBronze = u.rank === 3;
+              const isSelf = u.id === user.id;
+
+              return (
+                <div
+                  key={u.id}
+                  className={`p-2.5 rounded-xl border flex items-center justify-between text-xs transition-all ${
+                    isSelf
+                      ? 'bg-purple-950/60 border-purple-500/50 shadow-md'
+                      : isGold
+                      ? 'bg-amber-950/30 border-amber-500/40'
+                      : isSilver
+                      ? 'bg-slate-800/40 border-slate-700/40'
+                      : isBronze
+                      ? 'bg-orange-950/30 border-orange-500/30'
+                      : 'bg-slate-950/70 border-slate-800/60'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <div className={`w-6 h-6 rounded-lg font-black text-[11px] flex items-center justify-center ${
+                      isGold ? 'bg-amber-500 text-slate-950 shadow-md' :
+                      isSilver ? 'bg-slate-300 text-slate-950 shadow-md' :
+                      isBronze ? 'bg-amber-700 text-white shadow-md' :
+                      'bg-slate-800 text-slate-400'
+                    }`}>
+                      {u.rank === 1 ? '🥇' : u.rank === 2 ? '🥈' : u.rank === 3 ? '🥉' : `#${u.rank}`}
+                    </div>
+
+                    <div>
+                      <div className="font-bold text-slate-200 flex items-center gap-1">
+                        <span>{u.firstName}</span>
+                        {isSelf && <span className="text-[9px] bg-purple-500 text-white font-extrabold px-1.5 rounded">You</span>}
+                      </div>
+                      <div className="text-[10px] text-slate-400 font-mono">{u.username} • {u.totalAdsWatched} Ads Watched</div>
+                    </div>
+                  </div>
+
+                  <div className="text-right">
+                    <div className="font-extrabold text-emerald-400 font-mono text-xs">₹{u.totalEarned.toFixed(2)}</div>
+                    <div className="text-[9px] text-slate-400 font-mono">{(u.totalCoinsEarned || 0).toLocaleString()} 🪙</div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Recent Withdrawals Tracker */}
@@ -299,6 +546,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         )}
       </div>
+
+      {showHistoryModal && (
+        <TransactionHistoryModal
+          userId={user.id}
+          onClose={() => setShowHistoryModal(false)}
+        />
+      )}
     </div>
   );
 };

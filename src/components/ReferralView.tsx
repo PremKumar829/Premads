@@ -120,6 +120,126 @@ export const ReferralView: React.FC<ReferralViewProps> = ({
         </button>
       </div>
 
+      {/* Referral Milestone Card / Telegram Social Badge */}
+      <div className="bg-slate-900 border border-purple-500/30 rounded-2xl p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Trophy className="w-4 h-4 text-amber-400 animate-bounce" />
+            <span className="text-xs font-bold text-white">Referral Milestone Badge Card</span>
+          </div>
+          <span className="text-[10px] bg-purple-500/20 text-purple-300 border border-purple-500/40 px-2 py-0.5 rounded-full font-bold">
+            Telegram Share Ready
+          </span>
+        </div>
+        
+        <p className="text-[11px] text-slate-300">
+          Save this high-resolution official AdEarn Milestone Badge image and post it to Telegram groups, Instagram, or WhatsApp to attract referrals!
+        </p>
+
+        <div className="relative rounded-xl overflow-hidden border border-purple-500/40 shadow-xl group">
+          <img 
+            src="/src/assets/images/referral_badge_card_1786432603284.jpg" 
+            alt="AdEarn Referral Milestone Badge" 
+            className="w-full h-auto object-cover max-h-56 group-hover:scale-102 transition-transform duration-300"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-transparent opacity-80"></div>
+          <div className="absolute bottom-2 left-3 right-3 flex items-center justify-between text-white text-[11px]">
+            <div className="font-bold flex items-center gap-1.5">
+              <Crown className="w-3.5 h-3.5 text-amber-400" />
+              <span>Official Promoter Card</span>
+            </div>
+            <a 
+              href="/src/assets/images/referral_badge_card_1786432603284.jpg" 
+              download="AdEarn_Referral_Badge.jpg"
+              className="bg-purple-600 hover:bg-purple-500 text-white font-bold px-2.5 py-1 rounded-lg text-[10px] flex items-center gap-1 transition-all"
+            >
+              Save Badge Image
+            </a>
+          </div>
+        </div>
+      </div>
+
+      {/* Top Referrers Leaderboard (Top 5) */}
+      <div className="bg-gradient-to-br from-amber-950/40 via-slate-900 to-slate-900 border border-amber-500/30 rounded-2xl p-4 space-y-3 shadow-lg">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Crown className="w-5 h-5 text-amber-400 animate-pulse" />
+            <div>
+              <h3 className="text-xs font-bold text-white flex items-center gap-1.5">
+                Top Referrers Leaderboard
+                <Flame className="w-3.5 h-3.5 text-orange-400 fill-orange-400" />
+              </h3>
+              <p className="text-[10px] text-amber-200/70">Highest earners & active inviter rankings</p>
+            </div>
+          </div>
+          <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2.5 py-1 rounded-full font-extrabold flex items-center gap-1">
+            <TrendingUp className="w-3 h-3 text-amber-400" />
+            Top 5
+          </span>
+        </div>
+
+        <div className="space-y-2">
+          {topReferrers.map((refUser, index) => {
+            const isTop1 = index === 0;
+            const isTop2 = index === 1;
+            const isTop3 = index === 2;
+
+            let rankBadge = `${index + 1}`;
+            let bgStyle = "bg-slate-950/70 border-slate-800";
+            let rankColor = "bg-slate-800 text-slate-300 border-slate-700";
+
+            if (isTop1) {
+              rankBadge = "🥇 1st";
+              bgStyle = "bg-gradient-to-r from-amber-950/70 to-slate-900 border-amber-500/50";
+              rankColor = "bg-amber-500 text-slate-950 border-amber-400 font-black";
+            } else if (isTop2) {
+              rankBadge = "🥈 2nd";
+              bgStyle = "bg-gradient-to-r from-slate-800/80 to-slate-900 border-slate-400/40";
+              rankColor = "bg-slate-300 text-slate-950 border-slate-200 font-extrabold";
+            } else if (isTop3) {
+              rankBadge = "🥉 3rd";
+              bgStyle = "bg-gradient-to-r from-amber-900/30 to-slate-900 border-amber-700/40";
+              rankColor = "bg-amber-700 text-amber-100 border-amber-600 font-extrabold";
+            }
+
+            return (
+              <div
+                key={refUser.id}
+                className={`flex items-center justify-between p-2.5 rounded-xl border ${bgStyle} transition-all hover:scale-[1.01]`}
+              >
+                <div className="flex items-center gap-3">
+                  <span className={`text-[10px] px-2 py-0.5 rounded-lg border text-center font-bold ${rankColor}`}>
+                    {rankBadge}
+                  </span>
+                  <div>
+                    <div className="text-xs font-bold text-white flex items-center gap-1">
+                      {refUser.firstName}
+                      {refUser.id === user.id && (
+                        <span className="text-[9px] bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 px-1.5 py-0.2 rounded font-normal">
+                          You
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-[10px] text-slate-400 font-mono">
+                      @{refUser.username}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="text-right">
+                  <div className="text-xs font-extrabold text-amber-400">
+                    {refUser.actualRefCount} Referrals
+                  </div>
+                  <div className="text-[10px] text-emerald-400 font-medium">
+                    Earned ₹{(refUser.referralEarnings || refUser.actualRefCount * settings.referralReward).toFixed(2)}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
       {/* Reward Rules Breakdown */}
       <div className="grid grid-cols-2 gap-3">
         <div className="bg-slate-900/80 border border-slate-800 p-3.5 rounded-2xl flex flex-col justify-between">

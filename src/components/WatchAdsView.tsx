@@ -2,33 +2,130 @@ import React, { useState, useEffect } from 'react';
 import { User, SystemSettings, AdItem } from '../types';
 import { availableAdCatalog } from '../mockData';
 import { getTelegramGroupLink, getTelegramGroupDisplay } from '../utils/telegram';
-import { Tv, Play, CheckCircle2, AlertCircle, ExternalLink, ShieldCheck, Users, Sparkles, Lock, ArrowRight } from 'lucide-react';
+import { audioSynth } from '../utils/audio';
+import { api } from '../services/api';
+import { 
+  Tv, Play, CheckCircle2, AlertCircle, ExternalLink, ShieldCheck, Users, Sparkles, 
+  Lock, ArrowRight, Gift, Clock, RefreshCw, Zap, Flame, Filter, Layers, Infinity as InfinityIcon
+} from 'lucide-react';
 
 interface WatchAdsViewProps {
   user: User;
   settings: SystemSettings;
   onAdWatched: (adId: string) => Promise<any>;
   onVerifyGroupJoin?: () => Promise<any>;
+  onRefreshUserData?: () => void;
 }
+
+// Dynamic Campaign Generator helper for Infinite Campaign Streams
+const createDynamicCampaignBatch = (startIndex: number, perAdReward: number, directUrl: string, count: number = 6): AdItem[] => {
+  const categories: ('REWARDED' | 'DIRECT' | 'PUSH' | 'SPONSOR')[] = ['REWARDED', 'DIRECT', 'PUSH', 'SPONSOR'];
+  const providers = [
+    'Monetag Official Ad SDK v7',
+    'Monetag Direct eCPM Engine',
+    'Monetag In-Page Push Network',
+    'PrimeAds High-eCPM Partner',
+    'Monetag SmartLink Direct',
+    'VIP Crypto & Gaming Sponsor',
+    'Monetag Multi-Tag High CPM'
+  ];
+  const eCpmRates = ['$4.50', '$5.80', '$6.20', '$7.10', '$8.50', '$9.20', '$10.40'];
+
+  const batch: AdItem[] = [];
+  for (let i = 0; i < count; i++) {
+    const num = startIndex + i + 1;
+    const cat = categories[i % categories.length];
+    const prov = providers[i % providers.length];
+    const ecpm = eCpmRates[i % eCpmRates.length];
+    
+    batch.push({
+      id: `AD-MONETAG-${100 + num}`,
+      title: `Monetag High-eCPM Campaign #${100 + num}`,
+      category: cat,
+      reward: perAdReward || 0.05,
+      provider: prov,
+      eCpm: ecpm,
+      durationSec: 10,
+      description: `Watch 10s video/sponsor offer to claim 10 Coins (₹${perAdReward || 0.05}) instantly.`,
+      targetUrl: directUrl || 'https://monetag.com/directlink/demo_ad_zone_77821'
+    });
+  }
+  return batch;
+};
 
 export const WatchAdsView: React.FC<WatchAdsViewProps> = ({
   user,
   settings,
   onAdWatched,
-  onVerifyGroupJoin
+  onVerifyGroupJoin,
+  onRefreshUserData
 }) => {
-  const [selectedAd, setSelectedAd] = useState<AdItem>(availableAdCatalog[0]);
+  // Campaign List State (Supports Infinite Append & Unlimited Streams)
+  const [campaigns, setCampaigns] = useState<AdItem[]>(() => {
+    return availableAdCatalog.length >= 6 
+      ? availableAdCatalog 
+      : createDynamicCampaignBatch(0, settings.perAdReward, settings.monetagDirectLinkUrl, 6);
+  });
+
+  const [selectedAd, setSelectedAd] = useState<AdItem>(campaigns[0] || availableAdCatalog[0]);
   const [adState, setAdState] = useState<'IDLE' | 'WATCHING' | 'VERIFY' | 'CLAIMED' | 'COOLDOWN'>('IDLE');
   const [timerSec, setTimerSec] = useState(10);
   const [cooldownSec, setCooldownSec] = useState(0);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [successNotice, setSuccessNotice] = useState<string | null>(null);
   const [rewardClaimed, setRewardClaimed] = useState<number | null>(null);
   const [puzzleAnswer, setPuzzleAnswer] = useState('');
   const [numA, setNumA] = useState(3);
   const [numB, setNumB] = useState(4);
   const [verifyingGroup, setVerifyingGroup] = useState(false);
+  const [claimingCheckIn, setClaimingCheckIn] = useState(false);
+  const [checkInMsg, setCheckInMsg] = useState<string | null>(null);
+
+  // Unique Filtering State
+  const [activeCategory, setActiveCategory] = useState<'ALL' | 'UNWATCHED' | 'REWARDED' | 'DIRECT' | 'PUSH' | 'SPONSOR'>('ALL');
+  const [autoHideWatched, setAutoHideWatched] = useState(true);
 
   const watchedSet = new Set(user.watchedAdIds || []);
+
+  // 24H Daily Check-in Cooldown Calculation
+  const now = Date.now();
+  const checkInCooldown = 24 * 3600 * 1000;
+  const timeSinceLastCheckIn = user.lastCheckInAt ? (now - user.lastCheckInAt) : checkInCooldown + 1;
+  const isCheckInAvailable = timeSinceLastCheckIn >= checkInCooldown;
+  const msRemaining = Math.max(0, checkInCooldown - timeSinceLastCheckIn);
+  const hoursRemaining = Math.floor(msRemaining / (3600 * 1000));
+  const minsRemaining = Math.floor((msRemaining % (3600 * 1000)) / (60 * 1000));
+
+  // Function to load more dynamic unlimited campaigns
+  const handleLoadMoreCampaigns = (isAuto: boolean = false) => {
+    const currentLength = campaigns.length;
+    const newBatch = createDynamicCampaignBatch(currentLength, settings.perAdReward, settings.monetagDirectLinkUrl, 6);
+    setCampaigns(prev => [...prev, ...newBatch]);
+    
+    audioSynth.playDailyCheckInSound();
+    setSuccessNotice(
+      isAuto 
+        ? `🎉 All campaigns completed! 6 new fresh Monetag campaigns auto-loaded below!` 
+        : `⚡ +6 Fresh High-eCPM Monetag Campaigns loaded to your catalog!`
+    );
+    setTimeout(() => setSuccessNotice(null), 5000);
+  };
+
+  const handleClaimDailyCheckIn = async () => {
+    if (!isCheckInAvailable || claimingCheckIn) return;
+    setClaimingCheckIn(true);
+    setCheckInMsg(null);
+    try {
+      const res = await api.claimDailyCheckIn(user.id);
+      audioSynth.playDailyCheckInSound();
+      setCheckInMsg(`🎉 Claimed +50 Coins (₹0.25) Daily Login Bonus!`);
+      if (onRefreshUserData) onRefreshUserData();
+    } catch (err: any) {
+      setCheckInMsg(err.message || 'Failed to claim daily bonus');
+    } finally {
+      setClaimingCheckIn(false);
+    }
+  };
 
   // Cooldown timer effect
   useEffect(() => {
@@ -71,7 +168,7 @@ export const WatchAdsView: React.FC<WatchAdsViewProps> = ({
 
     // Prevent watching already watched ad
     if (watchedSet.has(ad.id)) {
-      setErrorMsg(`You have already watched ${ad.title} and claimed ₹${ad.reward}. Please select an un-watched ad!`);
+      setErrorMsg(`You have already watched ${ad.title}. Select an un-watched campaign or click 'Load More Campaigns' below!`);
       return;
     }
 
@@ -93,21 +190,18 @@ export const WatchAdsView: React.FC<WatchAdsViewProps> = ({
         console.log(`[Monetag SDK Zone ${settings.monetagZoneId || '11537959'}] Triggering format for category: ${ad.category}`);
 
         if (ad.category === 'REWARDED') {
-          // 1. Rewarded Interstitial
           showAdFn().then(() => {
             console.log('[Monetag SDK] Rewarded interstitial ad completed!');
           }).catch((e: any) => {
             console.warn('[Monetag SDK] Rewarded ad notice:', e);
           });
         } else if (ad.category === 'PUSH' || ad.category === 'DIRECT') {
-          // 2. Rewarded Popup
           showAdFn('pop').then(() => {
             console.log('[Monetag SDK] Rewarded Popup ad completed!');
           }).catch((e: any) => {
             console.warn('[Monetag SDK] Rewarded Popup notice:', e);
           });
         } else {
-          // 3. In-App Interstitial
           showAdFn({
             type: 'inApp',
             inAppSettings: {
@@ -140,10 +234,28 @@ export const WatchAdsView: React.FC<WatchAdsViewProps> = ({
     setErrorMsg(null);
     try {
       const res = await onAdWatched(selectedAd.id);
+      audioSynth.playCoinSound();
       setRewardClaimed(res.rewardEarned || settings.perAdReward);
       setAdState('CLAIMED');
       setCooldownSec(settings.adCooldownSec || 10);
       setPuzzleAnswer('');
+
+      // Auto-check if all active campaigns are watched! When 6 ads completed, auto-refresh clean list with 6 fresh ads!
+      const updatedWatchedIds = [...(user.watchedAdIds || []), selectedAd.id];
+      const remainingUnwatched = campaigns.filter(c => !updatedWatchedIds.includes(c.id));
+      
+      if (remainingUnwatched.length === 0) {
+        setTimeout(() => {
+          // Replace watched campaigns with 6 brand new clean Monetag campaigns!
+          const newStartIndex = campaigns.length;
+          const freshBatch = createDynamicCampaignBatch(newStartIndex, settings.perAdReward, settings.monetagDirectLinkUrl, 6);
+          setCampaigns(freshBatch);
+          setSelectedAd(freshBatch[0]);
+          audioSynth.playDailyCheckInSound();
+          setSuccessNotice(`✨ 6 Ads Completed! Auto-refreshed with 6 clean fresh unwatched campaigns!`);
+          setTimeout(() => setSuccessNotice(null), 5000);
+        }, 1200);
+      }
     } catch (err: any) {
       setErrorMsg(err.message || 'Failed to claim ad reward');
       setAdState('IDLE');
@@ -162,22 +274,69 @@ export const WatchAdsView: React.FC<WatchAdsViewProps> = ({
     }
   };
 
+  // Filtered campaign catalog (Auto-hides watched ads when autoHideWatched is ON for a clean view)
+  const filteredCampaigns = campaigns.filter(c => {
+    if (autoHideWatched && watchedSet.has(c.id)) return false;
+    if (activeCategory === 'UNWATCHED') return !watchedSet.has(c.id);
+    if (activeCategory === 'REWARDED') return c.category === 'REWARDED';
+    if (activeCategory === 'DIRECT') return c.category === 'DIRECT';
+    if (activeCategory === 'PUSH') return c.category === 'PUSH';
+    if (activeCategory === 'SPONSOR') return c.category === 'SPONSOR';
+    return true;
+  });
+
+  const firstUnwatched = campaigns.find(c => !watchedSet.has(c.id));
+
   return (
-    <div className="space-y-4 pb-16">
-      {/* Header Banner */}
-      <div className="bg-gradient-to-r from-blue-950 via-slate-900 to-slate-950 border border-blue-800/40 rounded-2xl p-4 flex items-center justify-between shadow-xl">
-        <div>
-          <div className="flex items-center gap-1.5 text-xs text-cyan-400 font-semibold">
-            <ShieldCheck className="w-4 h-4 text-cyan-400" />
-            Monetag Ad Network Zone #{settings.monetagZoneId}
+    <div className="space-y-4 pb-16 font-sans">
+      {/* Dynamic Unique Header Banner */}
+      <div className="bg-gradient-to-r from-cyan-950 via-slate-900 to-purple-950 border border-cyan-500/40 rounded-3xl p-4 sm:p-5 shadow-2xl space-y-3 relative overflow-hidden">
+        <div className="absolute -right-8 -bottom-8 w-32 h-32 bg-cyan-500/10 rounded-full blur-2xl pointer-events-none"></div>
+
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <span className="bg-cyan-950/90 text-cyan-300 border border-cyan-500/50 text-[10px] font-extrabold px-2.5 py-1 rounded-full flex items-center gap-1.5 shadow-sm">
+              <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping shrink-0" />
+              <InfinityIcon className="w-3.5 h-3.5 text-cyan-400" />
+              <span>UNLIMITED CAMPAIGN STREAM ACTIVE</span>
+            </span>
           </div>
-          <h2 className="text-lg font-bold text-white mt-1">Watch Ads & Earn 10 Coins (₹0.05) / Ad</h2>
-          <p className="text-xs text-slate-400">Tracked ad playback ensures 100% payout accuracy with no duplicate claims.</p>
+
+          <span className="text-[10px] text-purple-300 font-mono bg-purple-950/80 border border-purple-800 px-2 py-0.5 rounded-lg">
+            Monetag Zone #{settings.monetagZoneId}
+          </span>
         </div>
-        <div className="text-right bg-slate-950/80 p-2.5 rounded-xl border border-slate-800 shrink-0">
-          <div className="text-[10px] text-slate-400">Watched Today</div>
-          <div className="text-sm font-extrabold text-cyan-400">
-            {user.adsWatchedToday} / {settings.dailyAdLimit || 50} Ads
+
+        <div>
+          <h2 className="text-lg sm:text-xl font-black text-white tracking-wide flex items-center gap-2">
+            <span>Watch Unlimited Campaigns & Earn 10 Coins / Ad</span>
+          </h2>
+          <p className="text-xs text-slate-300 mt-1 leading-relaxed">
+            Continuously watch high-eCPM Monetag sponsor campaigns. Every ad completed credits 10 Coins (₹0.05) instantly to your balance!
+          </p>
+        </div>
+
+        {/* Live Metrics Row */}
+        <div className="grid grid-cols-3 gap-2 pt-1 border-t border-slate-800/80">
+          <div className="bg-slate-950/70 p-2 rounded-xl border border-slate-800/80 text-center">
+            <div className="text-[9px] text-slate-400 font-medium">Available Stream</div>
+            <div className="text-xs font-black text-cyan-400 flex items-center justify-center gap-1 mt-0.5">
+              <span>{campaigns.length} Campaigns</span>
+            </div>
+          </div>
+
+          <div className="bg-slate-950/70 p-2 rounded-xl border border-slate-800/80 text-center">
+            <div className="text-[9px] text-slate-400 font-medium">Completed Today</div>
+            <div className="text-xs font-black text-emerald-400 mt-0.5">
+              {user.adsWatchedToday} / {settings.dailyAdLimit || 50}
+            </div>
+          </div>
+
+          <div className="bg-slate-950/70 p-2 rounded-xl border border-slate-800/80 text-center">
+            <div className="text-[9px] text-slate-400 font-medium">Average eCPM</div>
+            <div className="text-xs font-black text-amber-300 mt-0.5">
+              $6.80 High CPM
+            </div>
           </div>
         </div>
       </div>
@@ -190,24 +349,75 @@ export const WatchAdsView: React.FC<WatchAdsViewProps> = ({
             <span className="font-bold text-slate-200">Personal Lifetime Ad Progress</span>
           </div>
           <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full border ${
-            (user.totalAdsWatched || 0) >= 100 ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+            (user.totalAdsWatched || 0) >= (settings.minAdsWatchForWithdrawal || 100) 
+              ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' 
+              : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
           }`}>
-            {(user.totalAdsWatched || 0) >= 100 ? '✅ 100/100 Payouts Unlocked' : `🔒 ${user.totalAdsWatched || 0}/100 Ads (Need ${Math.max(0, 100 - (user.totalAdsWatched || 0))} more for Withdrawal)`}
+            {(user.totalAdsWatched || 0) >= (settings.minAdsWatchForWithdrawal || 100) 
+              ? `✅ ${settings.minAdsWatchForWithdrawal || 100}/${settings.minAdsWatchForWithdrawal || 100} Payouts Unlocked` 
+              : `🔒 ${user.totalAdsWatched || 0}/${settings.minAdsWatchForWithdrawal || 100} Ads (Need ${Math.max(0, (settings.minAdsWatchForWithdrawal || 100) - (user.totalAdsWatched || 0))} more for Withdrawal)`}
           </span>
         </div>
 
-        <div className="space-y-1">
-          <div className="flex justify-between text-[10px] text-slate-400">
-            <span>Progress: {user.totalAdsWatched || 0} / 100 Ads Watched</span>
-            <span>{(user.totalAdsWatched || 0) < 50 ? `(Friend Referral Bonus Unlocks at 50 Ads)` : `(50-Ad Referral Milestone Completed ✅)`}</span>
-          </div>
-          <div className="w-full h-2 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
-            <div
-              className={`h-full transition-all duration-300 rounded-full ${(user.totalAdsWatched || 0) >= 100 ? 'bg-emerald-400' : 'bg-amber-400'}`}
-              style={{ width: `${Math.min(100, (((user.totalAdsWatched || 0) / 100) * 100))}%` }}
-            ></div>
-          </div>
+        <div className="w-full bg-slate-950 rounded-full h-2 border border-slate-800 overflow-hidden">
+          <div
+            className="bg-gradient-to-r from-amber-500 to-emerald-400 h-full transition-all duration-500"
+            style={{ width: `${Math.min(100, ((user.totalAdsWatched || 0) / (settings.minAdsWatchForWithdrawal || 100)) * 100)}%` }}
+          />
         </div>
+      </div>
+
+      {/* DAILY 24H CHECK-IN BONUS CARD */}
+      <div className="bg-gradient-to-r from-purple-950/90 via-slate-900 to-indigo-950/90 border border-purple-500/40 rounded-2xl p-4 space-y-3 shadow-xl">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="w-10 h-10 rounded-2xl bg-purple-500/20 text-purple-300 border border-purple-500/40 flex items-center justify-center font-bold text-lg shrink-0">
+              🎁
+            </div>
+            <div>
+              <h3 className="text-xs font-bold text-white flex items-center gap-1.5">
+                <span>Daily 24H Login Streak Reward</span>
+                <span className="bg-purple-950 text-purple-300 text-[9px] px-1.5 py-0.5 rounded border border-purple-800 font-extrabold">24H Timer</span>
+              </h3>
+              <p className="text-[10px] text-slate-300 mt-0.5">
+                Claim +50 Coins (₹0.25) every 24 hours just for opening the app!
+              </p>
+            </div>
+          </div>
+
+          <span className="text-xs font-extrabold text-amber-300 bg-amber-950/80 border border-amber-800 px-2.5 py-1 rounded-lg shrink-0">
+            +50 🪙
+          </span>
+        </div>
+
+        {checkInMsg && (
+          <div className="bg-purple-950/80 border border-purple-800 text-purple-200 p-2.5 rounded-xl text-xs font-semibold">
+            {checkInMsg}
+          </div>
+        )}
+
+        <div className="flex items-center justify-between bg-slate-950/80 p-2.5 rounded-xl border border-slate-800">
+          <div className="flex items-center gap-1.5 text-xs text-slate-300">
+            <Clock className="w-4 h-4 text-purple-400" />
+            <span>Next Claim:</span>
+          </div>
+          <span className={`text-xs font-bold font-mono ${isCheckInAvailable ? 'text-emerald-400' : 'text-amber-400'}`}>
+            {isCheckInAvailable ? 'READY TO CLAIM NOW!' : `${hoursRemaining}h ${minsRemaining}m remaining`}
+          </span>
+        </div>
+
+        <button
+          disabled={!isCheckInAvailable || claimingCheckIn}
+          onClick={handleClaimDailyCheckIn}
+          className={`w-full font-extrabold py-2.5 px-4 rounded-xl text-xs flex items-center justify-center gap-2 transition-all shadow-lg active:scale-98 ${
+            isCheckInAvailable && !claimingCheckIn
+              ? 'bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-400 hover:to-indigo-500 text-white cursor-pointer'
+              : 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed'
+          }`}
+        >
+          <Gift className="w-4 h-4" />
+          <span>{claimingCheckIn ? 'Claiming Reward...' : isCheckInAvailable ? 'Claim Daily 50 Coins (₹0.25)' : `Claimed! (Try in ${hoursRemaining}h ${minsRemaining}m)`}</span>
+        </button>
       </div>
 
       {/* MONETAG DIRECT LINK HIGH-CPM BANNER */}
@@ -253,7 +463,7 @@ export const WatchAdsView: React.FC<WatchAdsViewProps> = ({
             window.open(settings.monetagDirectLinkUrl || 'https://monetag.com/directlink/demo_ad_zone_77821', '_blank');
             handleStartAd(directAdItem);
           }}
-          className="w-full bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-extrabold py-2.5 px-4 rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg active:scale-98"
+          className="w-full bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-extrabold py-2.5 px-4 rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg active:scale-98 cursor-pointer"
         >
           <ExternalLink className="w-4 h-4" />
           <span>Launch Monetag Direct Link Ad & Earn ₹{settings.perAdReward}</span>
@@ -292,7 +502,7 @@ export const WatchAdsView: React.FC<WatchAdsViewProps> = ({
             <button
               onClick={handleVerifyGroup}
               disabled={verifyingGroup}
-              className="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold py-2 px-3 rounded-xl text-xs flex items-center gap-1"
+              className="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold py-2 px-3 rounded-xl text-xs flex items-center gap-1 cursor-pointer"
             >
               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
               <span>{verifyingGroup ? 'Verifying...' : 'Verify Join'}</span>
@@ -308,8 +518,15 @@ export const WatchAdsView: React.FC<WatchAdsViewProps> = ({
         </div>
       )}
 
+      {successNotice && (
+        <div className="bg-emerald-950/90 border border-emerald-500/80 text-emerald-200 p-3 rounded-xl text-xs flex items-center gap-2 font-bold shadow-lg animate-in fade-in duration-300">
+          <Sparkles className="w-4 h-4 text-emerald-400 shrink-0" />
+          <span>{successNotice}</span>
+        </div>
+      )}
+
       {/* Main Interactive Monetag Player Window */}
-      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-2xl relative overflow-hidden min-h-[300px] flex flex-col justify-between">
+      <div className="bg-slate-900 border-2 border-cyan-500/30 rounded-3xl p-5 shadow-2xl relative overflow-hidden min-h-[300px] flex flex-col justify-between">
         {/* Ad Status Bar */}
         <div className="flex items-center justify-between border-b border-slate-800 pb-3">
           <span className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
@@ -340,7 +557,7 @@ export const WatchAdsView: React.FC<WatchAdsViewProps> = ({
               className={`mt-5 font-extrabold py-3.5 px-8 rounded-2xl shadow-xl transition-all inline-flex items-center gap-2 ${
                 watchedSet.has(selectedAd.id)
                   ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'
-                  : 'bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 active:scale-95'
+                  : 'bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 active:scale-95 cursor-pointer'
               }`}
             >
               {watchedSet.has(selectedAd.id) ? (
@@ -418,7 +635,7 @@ export const WatchAdsView: React.FC<WatchAdsViewProps> = ({
 
             <button
               onClick={handleVerifyAndClaim}
-              className="mt-4 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold py-2.5 px-6 rounded-xl shadow-lg transition-all active:scale-95 text-xs"
+              className="mt-4 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold py-2.5 px-6 rounded-xl shadow-lg transition-all active:scale-95 text-xs cursor-pointer"
             >
               Verify & Claim ₹{settings.perAdReward}
             </button>
@@ -442,14 +659,17 @@ export const WatchAdsView: React.FC<WatchAdsViewProps> = ({
             <div className="pt-2">
               <button
                 disabled={cooldownSec > 0}
-                onClick={() => setAdState('IDLE')}
+                onClick={() => {
+                  setAdState('IDLE');
+                  if (firstUnwatched) setSelectedAd(firstUnwatched);
+                }}
                 className={`py-2.5 px-6 rounded-xl text-xs font-bold transition-all ${
                   cooldownSec > 0
                     ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'
-                    : 'bg-cyan-500 hover:bg-cyan-400 text-slate-950 shadow-lg'
+                    : 'bg-cyan-500 hover:bg-cyan-400 text-slate-950 shadow-lg cursor-pointer'
                 }`}
               >
-                {cooldownSec > 0 ? `Cooldown (${cooldownSec}s)` : 'Select Next Available Ad'}
+                {cooldownSec > 0 ? `Cooldown (${cooldownSec}s)` : 'Select Next Available Campaign'}
               </button>
             </div>
           </div>
@@ -462,66 +682,201 @@ export const WatchAdsView: React.FC<WatchAdsViewProps> = ({
         </div>
       </div>
 
-      {/* Available Ads Catalog List (Duplicate Tracking Protection) */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
-        <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-          <h3 className="text-xs font-bold text-slate-200 flex items-center gap-2">
-            <Tv className="w-4 h-4 text-cyan-400" />
-            Available Ad Campaigns ({availableAdCatalog.length})
-          </h3>
+      {/* UNIQUE CAMPAIGN CATALOG HEADER & FILTERS */}
+      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-4 space-y-3.5 shadow-xl">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-3">
+          <div>
+            <h3 className="text-sm font-extrabold text-white flex items-center gap-2">
+              <Tv className="w-4 h-4 text-cyan-400" />
+              <span>Unlimited Campaign Streams ({campaigns.length} Active)</span>
+            </h3>
+            <p className="text-[11px] text-slate-400 mt-0.5">
+              Select any campaign below to launch. New campaigns auto-generate continuously!
+            </p>
+          </div>
 
-          <span className="text-[10px] text-slate-400">
-            {watchedSet.size} / {availableAdCatalog.length} Watched
-          </span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => handleLoadMoreCampaigns(false)}
+              className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs font-extrabold px-3 py-1.5 rounded-xl border border-purple-400/30 flex items-center gap-1.5 shadow-md active:scale-95 transition-all cursor-pointer"
+            >
+              <Zap className="w-3.5 h-3.5 text-amber-300" />
+              <span>+6 Unlimited Campaigns</span>
+            </button>
+          </div>
         </div>
 
-        <div className="space-y-2">
-          {availableAdCatalog.map((ad) => {
-            const isWatched = watchedSet.has(ad.id);
-            const isSelected = selectedAd.id === ad.id;
+        {/* Quick Auto-Play Next Best Campaign CTA */}
+        {firstUnwatched && (
+          <button
+            onClick={() => handleStartAd(firstUnwatched)}
+            className="w-full bg-gradient-to-r from-amber-400 via-amber-500 to-yellow-500 hover:from-amber-300 hover:to-yellow-400 text-slate-950 font-black py-3 px-4 rounded-2xl shadow-xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] cursor-pointer"
+          >
+            <Play className="w-4 h-4 fill-slate-950" />
+            <span>Auto-Play Next Campaign: {firstUnwatched.title} (+10 🪙)</span>
+          </button>
+        )}
 
-            return (
-              <div
-                key={ad.id}
-                className={`p-3 rounded-xl border text-xs flex items-center justify-between transition-all ${
-                  isWatched
-                    ? 'bg-slate-950/60 border-slate-800/80 opacity-75'
-                    : isSelected
-                    ? 'bg-cyan-950/40 border-cyan-800/80'
-                    : 'bg-slate-950 border-slate-800/80 hover:border-slate-700'
-                }`}
+        {/* Unique Category Filter Pills */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
+          <button
+            onClick={() => setAutoHideWatched(!autoHideWatched)}
+            className={`px-3 py-1.5 rounded-xl font-extrabold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5 border ${
+              autoHideWatched
+                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 shadow-md'
+                : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-white'
+            }`}
+          >
+            <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Auto-Clear Watched ({autoHideWatched ? 'ON (Clean View)' : 'OFF'})</span>
+          </button>
+
+          <button
+            onClick={() => setActiveCategory('ALL')}
+            className={`px-3 py-1.5 rounded-xl font-bold whitespace-nowrap transition-all cursor-pointer ${
+              activeCategory === 'ALL'
+                ? 'bg-cyan-500 text-slate-950 shadow'
+                : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800'
+            }`}
+          >
+            All Streams ({campaigns.length})
+          </button>
+
+          <button
+            onClick={() => setActiveCategory('UNWATCHED')}
+            className={`px-3 py-1.5 rounded-xl font-bold whitespace-nowrap transition-all cursor-pointer ${
+              activeCategory === 'UNWATCHED'
+                ? 'bg-amber-400 text-slate-950 shadow'
+                : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800'
+            }`}
+          >
+            Unwatched Only ({campaigns.filter(c => !watchedSet.has(c.id)).length})
+          </button>
+
+          <button
+            onClick={() => setActiveCategory('REWARDED')}
+            className={`px-3 py-1.5 rounded-xl font-bold whitespace-nowrap transition-all cursor-pointer ${
+              activeCategory === 'REWARDED'
+                ? 'bg-purple-500 text-white shadow'
+                : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800'
+            }`}
+          >
+            Video Rewarded
+          </button>
+
+          <button
+            onClick={() => setActiveCategory('DIRECT')}
+            className={`px-3 py-1.5 rounded-xl font-bold whitespace-nowrap transition-all cursor-pointer ${
+              activeCategory === 'DIRECT'
+                ? 'bg-blue-500 text-white shadow'
+                : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800'
+            }`}
+          >
+            SmartLink Direct
+          </button>
+
+          <button
+            onClick={() => setActiveCategory('PUSH')}
+            className={`px-3 py-1.5 rounded-xl font-bold whitespace-nowrap transition-all cursor-pointer ${
+              activeCategory === 'PUSH'
+                ? 'bg-emerald-500 text-slate-950 shadow'
+                : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800'
+            }`}
+          >
+            In-Page Push
+          </button>
+
+          <button
+            onClick={() => setActiveCategory('SPONSOR')}
+            className={`px-3 py-1.5 rounded-xl font-bold whitespace-nowrap transition-all cursor-pointer ${
+              activeCategory === 'SPONSOR'
+                ? 'bg-rose-500 text-white shadow'
+                : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800'
+            }`}
+          >
+            VIP Partner
+          </button>
+        </div>
+
+        {/* Campaign List */}
+        <div className="space-y-2.5">
+          {filteredCampaigns.length === 0 ? (
+            <div className="py-8 text-center text-slate-400 text-xs border border-dashed border-slate-800 rounded-2xl space-y-2">
+              <p className="font-bold text-slate-200">No campaigns found in this filter.</p>
+              <button
+                onClick={() => handleLoadMoreCampaigns(false)}
+                className="bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-extrabold px-4 py-2 rounded-xl text-xs transition-all cursor-pointer"
               >
-                <div className="space-y-0.5">
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-slate-100">{ad.title}</span>
-                    <span className="bg-slate-800 text-slate-400 text-[9px] px-1.5 py-0.5 rounded font-mono">
-                      {ad.id}
-                    </span>
-                  </div>
-                  <div className="text-[10px] text-slate-400">
-                    Provider: {ad.provider} • Duration: {ad.durationSec}s • eCPM: {ad.eCpm}
-                  </div>
-                </div>
+                + Load Fresh Unlimited Campaigns Now
+              </button>
+            </div>
+          ) : (
+            filteredCampaigns.map((ad) => {
+              const isWatched = watchedSet.has(ad.id);
+              const isSelected = selectedAd.id === ad.id;
 
-                <div className="shrink-0 ml-2">
-                  {isWatched ? (
-                    <span className="bg-emerald-950 text-emerald-400 border border-emerald-800 text-[10px] px-2.5 py-1 rounded-lg font-bold flex items-center gap-1">
-                      <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-                      Watched (+10 🪙)
-                    </span>
-                  ) : (
-                    <button
-                      onClick={() => handleStartAd(ad)}
-                      className="bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold px-3 py-1.5 rounded-lg text-xs flex items-center gap-1 transition-all active:scale-95 shadow"
-                    >
-                      <Play className="w-3 h-3 fill-slate-950" />
-                      <span>Watch (+10 🪙)</span>
-                    </button>
-                  )}
+              return (
+                <div
+                  key={ad.id}
+                  className={`p-3.5 rounded-2xl border text-xs flex items-center justify-between transition-all ${
+                    isWatched
+                      ? 'bg-slate-950/60 border-slate-800/80 opacity-70'
+                      : isSelected
+                      ? 'bg-cyan-950/40 border-cyan-500/80 shadow-md'
+                      : 'bg-slate-950 border-slate-800 hover:border-slate-700'
+                  }`}
+                >
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-extrabold text-slate-100">{ad.title}</span>
+                      <span className="bg-slate-800 text-slate-400 text-[9px] px-1.5 py-0.5 rounded font-mono border border-slate-700">
+                        {ad.id}
+                      </span>
+                      <span className="bg-emerald-950 text-emerald-300 text-[9px] px-1.5 py-0.5 rounded font-extrabold border border-emerald-800">
+                        {ad.eCpm}
+                      </span>
+                    </div>
+
+                    <div className="text-[10px] text-slate-400 flex items-center gap-2">
+                      <span>{ad.provider}</span>
+                      <span>•</span>
+                      <span>10 Sec Stream</span>
+                      <span>•</span>
+                      <span className="text-amber-300 font-semibold">+10 Coins (₹{ad.reward})</span>
+                    </div>
+                  </div>
+
+                  <div className="shrink-0 ml-2">
+                    {isWatched ? (
+                      <span className="bg-emerald-950 text-emerald-400 border border-emerald-800 text-[10px] px-3 py-1.5 rounded-xl font-bold flex items-center gap-1">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>Watched (+10 🪙)</span>
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => handleStartAd(ad)}
+                        className="bg-amber-400 hover:bg-amber-300 text-slate-950 font-extrabold px-3.5 py-1.5 rounded-xl text-xs flex items-center gap-1.5 transition-all active:scale-95 shadow cursor-pointer"
+                      >
+                        <Play className="w-3.5 h-3.5 fill-slate-950" />
+                        <span>Watch (+10 🪙)</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })
+          )}
+        </div>
+
+        {/* Load More Fresh Unlimited Campaigns Footer CTA */}
+        <div className="pt-2 border-t border-slate-800 text-center">
+          <button
+            onClick={() => handleLoadMoreCampaigns(false)}
+            className="w-full bg-slate-950 hover:bg-slate-900 border border-purple-500/40 text-purple-300 hover:text-purple-200 font-extrabold py-3 px-4 rounded-2xl text-xs flex items-center justify-center gap-2 transition-all shadow cursor-pointer"
+          >
+            <Zap className="w-4 h-4 text-amber-300" />
+            <span>Load More Unlimited Monetag Campaigns (+6)</span>
+          </button>
         </div>
       </div>
     </div>

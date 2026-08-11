@@ -6,6 +6,7 @@ export const initialSettings: SystemSettings = {
   referralReward: 5,               // ₹5 = 1,000 Coins
   referralCommissionPct: 10,       // 10% lifetime commission
   minWithdrawal: 50,               // ₹50 = 10,000 Coins
+  minAdsWatchForWithdrawal: 100,   // Min Monetag ads watched required to unlock withdrawal (Configurable by CEO/Admin)
   adCooldownSec: 10,
   dailyAdLimit: 50,
   monetagDirectLinkUrl: 'https://monetag.com/directlink/demo_ad_zone_77821',

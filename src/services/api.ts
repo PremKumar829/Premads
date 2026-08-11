@@ -1,4 +1,4 @@
-import { SystemSettings, User, WithdrawalRequest, AdminMember, GroupMessage } from '../types';
+import { SystemSettings, User, WithdrawalRequest, AdminMember, GroupMessage, SupportTicket } from '../types';
 
 export const api = {
   // Settings
@@ -74,13 +74,29 @@ export const api = {
     return await res.json();
   },
 
-  userAction: async (userId: string, action: 'BAN' | 'UNBAN' | 'ADD_BALANCE' | 'DEDUCT_BALANCE' | 'ELEVATE_ROLE', amount?: number, reason?: string, role?: string) => {
+  userAction: async (userId: string, action: 'BAN' | 'UNBAN' | 'ADD_BALANCE' | 'DEDUCT_BALANCE' | 'ELEVATE_ROLE', amount?: number, reason?: string, role?: string, banType?: 'TEMPORARY' | 'PERMANENT') => {
     const res = await fetch(`/api/users/${userId}/action`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action, amount, reason, role })
+      body: JSON.stringify({ action, amount, reason, role, banType })
     });
     if (!res.ok) throw new Error('Failed to perform user action');
+    return await res.json();
+  },
+
+  claimDailyCheckIn: async (userId: string) => {
+    const res = await fetch(`/api/users/${userId}/daily-checkin`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to claim daily check-in');
+    return data;
+  },
+
+  getUserTransactions: async (userId: string) => {
+    const res = await fetch(`/api/users/${userId}/transactions`);
+    if (!res.ok) throw new Error('Failed to fetch transactions');
     return await res.json();
   },
 
@@ -189,6 +205,53 @@ export const api = {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Failed to send message');
+    return data;
+  },
+
+  // Support Tickets
+  getSupportTickets: async (userId?: string): Promise<SupportTicket[]> => {
+    const url = userId ? `/api/support-tickets?userId=${userId}` : '/api/support-tickets';
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('Failed to fetch support tickets');
+    return await res.json();
+  },
+
+  getLeaderboard: async () => {
+    const res = await fetch('/api/leaderboard');
+    if (!res.ok) throw new Error('Failed to fetch leaderboard');
+    return await res.json();
+  },
+
+  askAiFaq: async (question: string): Promise<{ success: boolean; question: string; answer: string }> => {
+    const res = await fetch('/api/faq/ask', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to get answer from AI Assistant');
+    return data;
+  },
+
+  submitSupportTicket: async (payload: { userId: string; issueType: string; message: string }): Promise<{ success: boolean; ticket: SupportTicket }> => {
+    const res = await fetch('/api/support-tickets', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to submit support ticket');
+    return data;
+  },
+
+  replySupportTicket: async (id: string, payload: { reply: string; status?: 'RESOLVED' | 'CLOSED'; processedBy?: string }): Promise<{ success: boolean; ticket: SupportTicket }> => {
+    const res = await fetch(`/api/support-tickets/${id}/reply`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to reply support ticket');
     return data;
   },
 

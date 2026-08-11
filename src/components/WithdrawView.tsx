@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { User, SystemSettings, WithdrawalRequest, WithdrawalMethod } from '../types';
 import { getTelegramGroupLink, getTelegramGroupDisplay } from '../utils/telegram';
-import { Wallet, CreditCard, Building2, AlertCircle, CheckCircle2, Clock, ShieldCheck, Sparkles, Users, ExternalLink, Lock } from 'lucide-react';
+import { Wallet, CreditCard, Building2, AlertCircle, CheckCircle2, Clock, ShieldCheck, Sparkles, Users, ExternalLink, Lock, XCircle, RefreshCw, Bell, AlertTriangle } from 'lucide-react';
 
 interface WithdrawViewProps {
   user: User;
@@ -41,8 +41,15 @@ export const WithdrawView: React.FC<WithdrawViewProps> = ({
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   const myWithdrawals = withdrawals.filter(w => w.userId === user.id);
+  const myWithdrawalsSorted = [...myWithdrawals].sort((a, b) => new Date(b.requestedAt).getTime() - new Date(a.requestedAt).getTime());
+  const latestWithdrawal = myWithdrawalsSorted[0] || null;
+  const pendingCount = myWithdrawals.filter(w => w.status === 'PENDING').length;
+  const approvedCount = myWithdrawals.filter(w => w.status === 'APPROVED').length;
+  const rejectedCount = myWithdrawals.filter(w => w.status === 'REJECTED').length;
+
+  const minAdsRequired = settings.minAdsWatchForWithdrawal || 100;
   const lifetimeAds = user.totalAdsWatched || user.watchedAdIds?.length || 0;
-  const isWithdrawLocked = lifetimeAds < 100;
+  const isWithdrawLocked = lifetimeAds < minAdsRequired;
 
   const handleVerifyGroup = async () => {
     if (!onVerifyGroupJoin) return;
@@ -61,9 +68,9 @@ export const WithdrawView: React.FC<WithdrawViewProps> = ({
     setErrorMsg(null);
     setSuccessMsg(null);
 
-    // STRICT ANTI-FRAUD CONDITION 1: 100 Ads Watched Minimum
+    // STRICT ANTI-FRAUD CONDITION 1: Minimum Ads Watched Requirement
     if (isWithdrawLocked) {
-      setErrorMsg(`⚠️ Action Required: You must personally watch at least 100 ads to unlock payouts. (Watched: ${lifetimeAds}/100)`);
+      setErrorMsg(`⚠️ Action Required: You must personally watch at least ${minAdsRequired} ads to unlock payouts. (Watched: ${lifetimeAds}/${minAdsRequired})`);
       return;
     }
 
@@ -146,6 +153,106 @@ export const WithdrawView: React.FC<WithdrawViewProps> = ({
           <div className="text-sm font-extrabold text-emerald-400">₹{settings.minWithdrawal}.00</div>
         </div>
       </div>
+
+      {/* VISUAL WITHDRAWAL STATUS TOAST / BADGE */}
+      {latestWithdrawal && (
+        <div className={`p-4 rounded-2xl border shadow-xl relative overflow-hidden transition-all ${
+          latestWithdrawal.status === 'PENDING'
+            ? 'bg-gradient-to-r from-amber-950/90 via-slate-900 to-slate-950 border-amber-500/60'
+            : latestWithdrawal.status === 'APPROVED'
+            ? 'bg-gradient-to-r from-emerald-950/90 via-slate-900 to-slate-950 border-emerald-500/60'
+            : 'bg-gradient-to-r from-rose-950/90 via-slate-900 to-slate-950 border-rose-500/60'
+        }`}>
+          {/* Subtle accent glow background */}
+          <div className={`absolute top-0 right-0 w-28 h-28 rounded-full blur-2xl pointer-events-none ${
+            latestWithdrawal.status === 'PENDING' ? 'bg-amber-500/10' :
+            latestWithdrawal.status === 'APPROVED' ? 'bg-emerald-500/10' : 'bg-rose-500/10'
+          }`} />
+
+          <div className="flex items-start justify-between gap-3 relative z-10">
+            <div className="flex items-start gap-3">
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border shadow-md ${
+                latestWithdrawal.status === 'PENDING'
+                  ? 'bg-amber-500/20 text-amber-400 border-amber-500/40'
+                  : latestWithdrawal.status === 'APPROVED'
+                  ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
+                  : 'bg-rose-500/20 text-rose-400 border-rose-500/40'
+              }`}>
+                {latestWithdrawal.status === 'PENDING' ? (
+                  <RefreshCw className="w-5 h-5 animate-spin text-amber-400" />
+                ) : latestWithdrawal.status === 'APPROVED' ? (
+                  <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+                ) : (
+                  <XCircle className="w-5 h-5 text-rose-400" />
+                )}
+              </div>
+
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs font-extrabold text-white">Latest Withdrawal Status</span>
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-black border uppercase tracking-wider flex items-center gap-1 ${
+                    latestWithdrawal.status === 'PENDING'
+                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 animate-pulse'
+                      : latestWithdrawal.status === 'APPROVED'
+                      ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                      : 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                  }`}>
+                    {latestWithdrawal.status === 'PENDING' && <Clock className="w-3 h-3" />}
+                    {latestWithdrawal.status === 'APPROVED' && <Sparkles className="w-3 h-3" />}
+                    {latestWithdrawal.status === 'REJECTED' && <AlertTriangle className="w-3 h-3" />}
+                    {latestWithdrawal.status === 'PENDING' ? 'Processing' : latestWithdrawal.status === 'APPROVED' ? 'Approved & Paid ⚡' : 'Rejected'}
+                  </span>
+                </div>
+
+                <p className="text-xs font-medium text-slate-200">
+                  {latestWithdrawal.status === 'PENDING' && (
+                    <>Your request for <strong className="text-amber-300 font-mono">₹{latestWithdrawal.amount.toFixed(2)}</strong> via <strong className="text-slate-100">{latestWithdrawal.method}</strong> is currently being processed by our approval team.</>
+                  )}
+                  {latestWithdrawal.status === 'APPROVED' && (
+                    <>Success! <strong className="text-emerald-300 font-mono">₹{latestWithdrawal.amount.toFixed(2)}</strong> requested via <strong className="text-slate-100">{latestWithdrawal.method}</strong> has been approved and paid out.</>
+                  )}
+                  {latestWithdrawal.status === 'REJECTED' && (
+                    <>Request for <strong className="text-rose-300 font-mono">₹{latestWithdrawal.amount.toFixed(2)}</strong> was rejected and refunded back to your wallet balance.</>
+                  )}
+                </p>
+
+                {latestWithdrawal.rejectionReason && (
+                  <div className="text-[10px] text-rose-300 bg-rose-950/60 p-2 rounded-lg border border-rose-900/60 mt-1">
+                    <strong>Reason:</strong> {latestWithdrawal.rejectionReason}
+                  </div>
+                )}
+
+                <div className="text-[10px] text-slate-400 flex items-center gap-2 pt-0.5">
+                  <span>Req #{latestWithdrawal.id}</span>
+                  <span>•</span>
+                  <span>{new Date(latestWithdrawal.requestedAt).toLocaleString()}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Quick Stats Summary Row */}
+          <div className="mt-3 pt-2.5 border-t border-slate-800/80 flex items-center justify-between text-[10px] font-semibold text-slate-400">
+            <span className="flex items-center gap-1.5">
+              <Bell className="w-3 h-3 text-cyan-400" />
+              <span>Withdrawal Log Summary:</span>
+            </span>
+            <div className="flex items-center gap-2">
+              <span className="bg-amber-500/10 text-amber-300 px-2 py-0.5 rounded-md border border-amber-500/20">
+                ⏳ {pendingCount} Processing
+              </span>
+              <span className="bg-emerald-500/10 text-emerald-300 px-2 py-0.5 rounded-md border border-emerald-500/20">
+                ✅ {approvedCount} Approved
+              </span>
+              {rejectedCount > 0 && (
+                <span className="bg-rose-500/10 text-rose-300 px-2 py-0.5 rounded-md border border-rose-500/20">
+                  ❌ {rejectedCount} Rejected
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* STRICT ANTI-FRAUD WITHDRAWAL CONDITION (100 ADS MINIMUM) */}
       <div className={`p-4 rounded-2xl border shadow-xl transition-all ${

@@ -4,9 +4,22 @@ export type WithdrawalMethod = 'UPI' | 'BANK';
 
 export type RequestStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 
+export type TransactionType = 'AD_WATCH' | 'DAILY_CHECKIN' | 'REFERRAL_BONUS' | 'COMMISSION' | 'GIFT_CLAIM' | 'WITHDRAWAL_REQUEST' | 'WITHDRAWAL_REFUND' | 'ADMIN_DEDUCTION' | 'ADMIN_ADDITION';
+
+export interface TransactionItem {
+  id: string;
+  userId: string;
+  type: TransactionType;
+  title: string;
+  coins: number;
+  amountInr: number;
+  timestamp: string;
+  description?: string;
+}
+
 export interface UserNotification {
   id: string;
-  type: 'BALANCE_DEDUCTED' | 'WITHDRAWAL_APPROVED' | 'WITHDRAWAL_REJECTED' | 'REFERRAL_SUCCESS' | 'SYSTEM_ALERT';
+  type: 'BALANCE_DEDUCTED' | 'WITHDRAWAL_APPROVED' | 'WITHDRAWAL_REJECTED' | 'REFERRAL_SUCCESS' | 'SYSTEM_ALERT' | 'ACCOUNT_BANNED' | 'ACCOUNT_UNBANNED' | 'DAILY_CHECKIN' | 'REFERRAL_NEW_JOIN';
   title: string;
   message: string;
   amount?: number;
@@ -21,6 +34,7 @@ export interface SystemSettings {
   referralReward: number;          // Default: ₹5 (1,000 Coins)
   referralCommissionPct: number;   // Default: 10%
   minWithdrawal: number;           // Default: ₹50 (10,000 Coins)
+  minAdsWatchForWithdrawal: number; // Default: 100 ads (Configurable by CEO/Admin)
   adCooldownSec: number;           // Default: 10 sec
   dailyAdLimit: number;            // Default: 50 ads
   monetagDirectLinkUrl: string;
@@ -46,9 +60,10 @@ export interface User {
   balance: number;                 // Wallet balance in INR ₹ (coins / 200)
   totalEarned: number;             // Lifetime earned in INR ₹
   totalWithdrawn: number;          // Total withdrawn in INR ₹
-  totalAdsWatched: number;         // Lifetime total Monetag ads watched (Min 100 required for withdrawal)
+  totalAdsWatched: number;         // Lifetime total Monetag ads watched
   adsWatchedToday: number;
   lastAdWatchedAt: number;         // Timestamp ms
+  lastCheckInAt?: number;          // Timestamp ms for 24h daily check-in
   watchedAdIds: string[];          // Tracked Ad IDs watched by this user
   hasJoinedFastGroup: boolean;     // Must join Telegram group for fast withdrawals
   referredBy: string | null;       // Referrer ID
@@ -58,6 +73,8 @@ export interface User {
   notifications?: UserNotification[];
   role: UserRole;
   isBanned: boolean;
+  banType?: 'TEMPORARY' | 'PERMANENT';
+  banReason?: string;
   joinedAt: string;
 }
 
@@ -139,4 +156,17 @@ export interface BotChatMessage {
     color?: 'red' | 'blue' | 'green' | 'amber' | 'purple' | 'crimson' | 'emerald' | 'cyan';
     animatedEmoji?: string;
   }>;
+}
+
+export interface SupportTicket {
+  id: string;
+  userId: string;
+  userName: string;
+  userTelegram: string;
+  issueType: string;
+  message: string;
+  status: 'OPEN' | 'RESOLVED' | 'CLOSED';
+  reply?: string;
+  createdAt: string;
+  updatedAt?: string;
 }

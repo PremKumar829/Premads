@@ -325,7 +325,7 @@ export default function App() {
               )}
 
               {activeTab === 'help' && (
-                <HelpView settings={settings} />
+                <HelpView settings={settings} currentUser={currentUser} />
               )}
 
               {activeTab === 'admin' && currentUser.role !== 'USER' && (

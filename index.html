@@ -4,22 +4,47 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>VYRNXY ADS - Watch Ads & Earn Rewards Telegram Mini App</title>
-    <!-- Telegram WebApp SDK Error Shield -->
+    <!-- Telegram WebApp SDK Error Shield & Pre-init -->
     <script>
       (function() {
+        // Pre-set location hash so Telegram WebApp SDK detects version 8.0 natively
+        try {
+          if (!window.location.hash || !window.location.hash.includes('tgWebAppVersion')) {
+            var currentHash = window.location.hash ? window.location.hash.substring(1) : '';
+            var newHash = 'tgWebAppVersion=8.0&tgWebAppPlatform=weba' + (currentHash ? '&' + currentHash : '');
+            if (window.history && window.history.replaceState) {
+              window.history.replaceState(null, '', window.location.pathname + window.location.search + '#' + newHash);
+            }
+          }
+        } catch (e) {}
+
+        // Suppress Telegram WebApp version/CloudStorage console errors
         var origConsoleError = console.error;
         console.error = function() {
           if (arguments && arguments[0] && typeof arguments[0] === 'string' && (
             arguments[0].includes('[Telegram.WebApp] CloudStorage is not supported') ||
-            arguments[0].includes('CloudStorage')
+            arguments[0].includes('CloudStorage') ||
+            arguments[0].includes('is not supported in version')
           )) {
             return;
           }
           origConsoleError.apply(console, arguments);
         };
 
+        var origConsoleWarn = console.warn;
+        console.warn = function() {
+          if (arguments && arguments[0] && typeof arguments[0] === 'string' && (
+            arguments[0].includes('[Telegram.WebApp] CloudStorage is not supported') ||
+            arguments[0].includes('CloudStorage') ||
+            arguments[0].includes('is not supported in version')
+          )) {
+            return;
+          }
+          origConsoleWarn.apply(console, arguments);
+        };
+
         window.addEventListener('error', function(event) {
-          if (event && event.message && String(event.message).includes('CloudStorage')) {
+          if (event && event.message && (String(event.message).includes('CloudStorage') || String(event.message).includes('is not supported'))) {
             event.preventDefault();
             event.stopImmediatePropagation();
             return true;
@@ -27,7 +52,7 @@
         }, true);
 
         window.addEventListener('unhandledrejection', function(event) {
-          if (event && event.reason && String(event.reason).includes('CloudStorage')) {
+          if (event && event.reason && (String(event.reason).includes('CloudStorage') || String(event.reason).includes('is not supported'))) {
             event.preventDefault();
           }
         }, true);
@@ -37,6 +62,15 @@
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script>
       (function() {
+        var localStorageCS = {
+          setItem: function(k, v, cb) { try { localStorage.setItem('tg_cs_' + k, v); if (cb) cb(null, true); } catch(e) { if (cb) cb(e, false); } return localStorageCS; },
+          getItem: function(k, cb) { try { var val = localStorage.getItem('tg_cs_' + k) || ''; if (cb) cb(null, val); } catch(e) { if (cb) cb(e, ''); } return localStorageCS; },
+          getItems: function(keys, cb) { try { var res = {}; keys.forEach(function(k){ res[k] = localStorage.getItem('tg_cs_' + k) || ''; }); if (cb) cb(null, res); } catch(e) { if (cb) cb(e, {}); } return localStorageCS; },
+          removeItem: function(k, cb) { try { localStorage.removeItem('tg_cs_' + k); if (cb) cb(null, true); } catch(e) { if (cb) cb(e, false); } return localStorageCS; },
+          removeItems: function(keys, cb) { try { keys.forEach(function(k){ localStorage.removeItem('tg_cs_' + k); }); if (cb) cb(null, true); } catch(e) { if (cb) cb(e, false); } return localStorageCS; },
+          getKeys: function(cb) { try { var keys = Object.keys(localStorage).filter(function(k){ return k.startsWith('tg_cs_'); }).map(function(k){ return k.replace('tg_cs_', ''); }); if (cb) cb(null, keys); } catch(e) { if (cb) cb(e, []); } return localStorageCS; }
+        };
+
         if (window.Telegram && window.Telegram.WebApp) {
           var tg = window.Telegram.WebApp;
           try {
@@ -44,18 +78,15 @@
             tg.isVersionAtLeast = function() { return true; };
           } catch (e) {}
 
-          var localStorageCS = {
-            setItem: function(k, v, cb) { try { localStorage.setItem('tg_cs_' + k, v); if (cb) cb(null, true); } catch(e) { if (cb) cb(e, false); } return localStorageCS; },
-            getItem: function(k, cb) { try { var val = localStorage.getItem('tg_cs_' + k) || ''; if (cb) cb(null, val); } catch(e) { if (cb) cb(e, ''); } return localStorageCS; },
-            getItems: function(keys, cb) { try { var res = {}; keys.forEach(function(k){ res[k] = localStorage.getItem('tg_cs_' + k) || ''; }); if (cb) cb(null, res); } catch(e) { if (cb) cb(e, {}); } return localStorageCS; },
-            removeItem: function(k, cb) { try { localStorage.removeItem('tg_cs_' + k); if (cb) cb(null, true); } catch(e) { if (cb) cb(e, false); } return localStorageCS; },
-            removeItems: function(keys, cb) { try { keys.forEach(function(k){ localStorage.removeItem('tg_cs_' + k); }); if (cb) cb(null, true); } catch(e) { if (cb) cb(e, false); } return localStorageCS; },
-            getKeys: function(cb) { try { var keys = Object.keys(localStorage).filter(function(k){ return k.startsWith('tg_cs_'); }).map(function(k){ return k.replace('tg_cs_', ''); }); if (cb) cb(null, keys); } catch(e) { if (cb) cb(e, []); } return localStorageCS; }
-          };
-
           try {
-            Object.defineProperty(tg, 'CloudStorage', { get: function() { return localStorageCS; }, configurable: true });
-          } catch (e) {}
+            Object.defineProperty(tg, 'CloudStorage', {
+              get: function() { return localStorageCS; },
+              set: function() {},
+              configurable: true
+            });
+          } catch (e) {
+            try { tg.CloudStorage = localStorageCS; } catch (err) {}
+          }
         }
       })();
     </script>
