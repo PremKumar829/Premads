@@ -95,7 +95,31 @@ export const availableAdCatalog: AdItem[] = [
   }
 ];
 
+export const defaultGuestUser: User = {
+  id: 'guest_1001',
+  username: 'guest_user',
+  firstName: 'Guest User',
+  coins: 0,
+  totalCoinsEarned: 0,
+  balance: 0,
+  totalEarned: 0,
+  totalWithdrawn: 0,
+  totalAdsWatched: 0,
+  adsWatchedToday: 0,
+  lastAdWatchedAt: 0,
+  watchedAdIds: [],
+  hasJoinedFastGroup: false,
+  referredBy: null,
+  referralCount: 0,
+  referralEarnings: 0,
+  referralBonusCredited: false,
+  role: 'USER',
+  isBanned: false,
+  joinedAt: new Date().toISOString()
+};
+
 export const initialUsers: User[] = [
+  defaultGuestUser,
   {
     id: '826258441',
     username: 'premsargam',

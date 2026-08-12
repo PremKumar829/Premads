@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { User, SystemSettings, WithdrawalRequest, AdminMember, GroupMessage } from './types';
-import { initialSettings, initialUsers, initialAdminTeam, initialWithdrawalRequests, initialGroupMessages } from './mockData';
+import { initialSettings, initialUsers, initialAdminTeam, initialWithdrawalRequests, initialGroupMessages, defaultGuestUser } from './mockData';
 import { api } from './services/api';
 import { TelegramFrame } from './components/TelegramFrame';
 import { Navigation } from './components/Navigation';
@@ -18,11 +18,12 @@ import { FastGroupView } from './components/FastGroupView';
 import { AdminPanel } from './components/AdminPanel';
 import { HelpView } from './components/HelpView';
 import { UserNotificationModal } from './components/UserNotificationModal';
+import { MaintenanceModal } from './components/MaintenanceModal';
 
 export default function App() {
   const [settings, setSettings] = useState<SystemSettings>(initialSettings);
   const [users, setUsers] = useState<User[]>(initialUsers);
-  const [currentUser, setCurrentUser] = useState<User>(initialUsers[0]);
+  const [currentUser, setCurrentUser] = useState<User>(defaultGuestUser);
   const [withdrawals, setWithdrawals] = useState<WithdrawalRequest[]>(initialWithdrawalRequests);
   const [adminTeam, setAdminTeam] = useState<AdminMember[]>(initialAdminTeam);
   const [groupMessages, setGroupMessages] = useState<GroupMessage[]>(initialGroupMessages);
@@ -74,7 +75,7 @@ export default function App() {
         const u = await api.getAllUsers();
         if (u && u.length > 0) {
           setUsers(u);
-          setCurrentUser(prev => u.find((item) => item.id === prev.id) || u[0]);
+          setCurrentUser(prev => u.find((item) => item.id === prev.id) || prev);
         }
 
         const w = await api.getWithdrawals();
@@ -265,6 +266,15 @@ export default function App() {
 
   return (
     <>
+      <MaintenanceModal
+        settings={settings}
+        user={currentUser}
+        onOpenAdminPanel={() => {
+          setActiveAppMode('admin');
+          setActiveTab('admin');
+        }}
+      />
+
       {unreadNotification && (
         <UserNotificationModal
           notification={unreadNotification}
@@ -328,7 +338,7 @@ export default function App() {
                 <HelpView settings={settings} currentUser={currentUser} />
               )}
 
-              {activeTab === 'admin' && currentUser.role !== 'USER' && (
+              {activeTab === 'admin' && (
                 <AdminPanel
                   currentUser={currentUser}
                   settings={settings}
@@ -382,7 +392,7 @@ export default function App() {
       )}
 
       {/* MODE 4: FULL ADMIN SUITE */}
-      {activeAppMode === 'admin' && currentUser.role !== 'USER' && (
+      {activeAppMode === 'admin' && (
         <AdminPanel
           currentUser={currentUser}
           settings={settings}

@@ -11,8 +11,9 @@ import {
   initialAdWatchLogs
 } from "./src/mockData.js";
 import { SystemSettings, User, WithdrawalRequest, AdminMember, GroupMessage, AdWatchLog, TransactionItem, SupportTicket } from "./src/types.js";
+import { FirestoreStorage } from "./src/lib/firestoreStorage.js";
 
-// In-Memory Data Store (Persisted across API calls during runtime)
+// In-Memory Data Store (Persisted across API calls & synced with Firestore)
 let settings: SystemSettings = {
   ...initialSettings,
   minAdsWatchForWithdrawal: initialSettings.minAdsWatchForWithdrawal || 100,
@@ -74,24 +75,38 @@ function addTransaction(userId: string, type: any, title: string, coins: number,
     description
   };
   transactionsLog.unshift(item);
+  FirestoreStorage.saveTransaction(item);
   return item;
 }
 
 // Telegram Bot Helpers & Polling
-async function sendTelegramMessage(chatId: string | number, text: string, replyMarkup?: any) {
+async function sendTelegramMessage(chatId: string | number, text: string, replyMarkup?: any, parseMode: string = 'HTML') {
   if (!settings.botToken || settings.botToken === 'YOUR_BOT_TOKEN_HERE') return;
   try {
     const url = `https://api.telegram.org/bot${settings.botToken}/sendMessage`;
-    await fetch(url, {
+    const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         chat_id: chatId,
         text,
-        parse_mode: 'Markdown',
+        parse_mode: parseMode,
         reply_markup: replyMarkup
       })
     });
+    const data: any = await res.json();
+    if (!data.ok) {
+      console.warn('Telegram sendMessage format warning, attempting plain text fallback:', data?.description);
+      await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text: text.replace(/<[^>]*>/g, '').replace(/[*_`]/g, ''),
+          reply_markup: replyMarkup
+        })
+      });
+    }
   } catch (err) {
     console.error('Telegram sendMessage error:', err);
   }
@@ -141,6 +156,7 @@ async function handleTelegramUpdate(update: any) {
     };
     users.push(user);
     addTransaction(user.id, 'GIFT_CLAIM', 'Welcome Joining Bonus', welcomeBonus * 200, welcomeBonus, 'Welcome registration reward credited');
+    FirestoreStorage.saveUser(user);
 
     if (refUser) {
       if (!refUser.notifications) refUser.notifications = [];
@@ -152,12 +168,16 @@ async function handleTelegramUpdate(update: any) {
         read: false,
         timestamp: new Date().toISOString()
       });
+      FirestoreStorage.saveUser(refUser);
       sendTelegramMessage(refUser.id, `🎉 *New Referral Joined!*\nUser @${user.username} (${user.firstName}) just joined via your link! You will earn ₹${settings.referralReward || 5} bonus + 10% commission when they watch ads.`);
     }
   } else {
     if (settings.ownerTelegramId && telegramId === settings.ownerTelegramId) {
       user.role = 'CEO';
     }
+    user.username = username || user.username;
+    user.firstName = firstName || user.firstName;
+    FirestoreStorage.saveUser(user);
   }
 
   const appUrl = settings.botAppUrl || process.env.APP_URL || 'https://premads.onrender.com';
@@ -239,6 +259,7 @@ async function handleTelegramUpdate(update: any) {
       user.totalEarned = Number((user.totalCoinsEarned / 200).toFixed(2));
       user.lastCheckInAt = now;
       addTransaction(user.id, 'DAILY_CHECKIN', 'Daily 24H Bonus Claim', 50, 0.25, 'Claimed via Telegram Bot');
+      FirestoreStorage.saveUser(user);
       await sendTelegramMessage(chatId, `🎁 *Daily Bonus Claimed!*\n+50 Coins (₹0.25) credited to your balance! New Balance: ${(user.coins || 0).toLocaleString()} Coins.`, keyboard);
     }
   } else if (text === '/support') {
@@ -247,21 +268,23 @@ async function handleTelegramUpdate(update: any) {
       `💬 *Official Telegram Channel:* @${settings.fastGroupUsername || 'AdEarn_FastWithdrawals'}\n` +
       `⚡ *Support Availability:* 24/7 Fast Response`;
     await sendTelegramMessage(chatId, suppText, keyboard);
-  } else if (text.startsWith('#1') || text.startsWith('/pass')) {
+  } else if (text.startsWith('#1') || text.includes('#1') || text.startsWith('/pass') || text.startsWith('/1')) {
     // #1 HASHTAG FAST WITHDRAWAL PASS COMMAND FOR TELEGRAM APPROVAL GROUP
-    const parts = text.replace(/^#1/, '').replace(/^\/pass/, '').trim().split(/\s+/);
-    const reqId = parts[0];
+    const cleanedText = text.replace(/#1/gi, '').replace(/\/pass/gi, '').replace(/\/1/gi, '').trim();
+    const parts = cleanedText.split(/\s+/);
+    const reqId = parts[0] ? parts[0].replace(/^#/, '') : '';
     
     // Find pending request matching ID or get first pending request
     let targetReq = reqId ? withdrawalRequests.find(r => r.id === reqId && r.status === 'PENDING') : withdrawalRequests.find(r => r.status === 'PENDING');
     
     if (!targetReq) {
-      await sendTelegramMessage(chatId, `⚠️ *Withdrawal Pass Guard (#1)*\nNo pending withdrawal request found for ID: \`${reqId || 'Latest'}\`. Please verify Request ID.`);
+      await sendTelegramMessage(chatId, `⚠️ <b>Withdrawal Pass Guard (#1)</b>\nNo pending withdrawal request found for ID: <code>${reqId || 'Latest'}</code>. Please verify Request ID.`, undefined, 'HTML');
     } else {
       targetReq.status = 'APPROVED';
       targetReq.processedAt = new Date().toISOString();
       targetReq.processedBy = `@${username} (Telegram Approval Guard)`;
       targetReq.fastApproved = true;
+      FirestoreStorage.saveWithdrawal(targetReq);
 
       const reqUser = users.find(u => u.id === targetReq.userId);
       if (reqUser) {
@@ -276,21 +299,22 @@ async function handleTelegramUpdate(update: any) {
           read: false,
           timestamp: new Date().toISOString()
         });
-        sendTelegramMessage(reqUser.id, `⚡ *Withdrawal Approved & Paid! (#1)*\nYour payout request #${targetReq.id} of ₹${targetReq.amount.toFixed(2)} has been processed and paid!`);
+        FirestoreStorage.saveUser(reqUser);
+        sendTelegramMessage(reqUser.id, `⚡ <b>Withdrawal Approved & Paid! (#1)</b>\nYour payout request #${targetReq.id} of ₹${targetReq.amount.toFixed(2)} has been processed and paid!`, undefined, 'HTML');
       }
 
-      const passReceipt = `✅ *WITHDRAWAL PASSED & APPROVED (#1)*\n` +
+      const passReceipt = `✅ <b>WITHDRAWAL PASSED & APPROVED (#1)</b>\n` +
         `------------------------------------\n` +
-        `🆔 *Request ID:* #${targetReq.id}\n` +
-        `👤 *User:* ${targetReq.userName} (${targetReq.userTelegram})\n` +
-        `💵 *Amount:* ₹${targetReq.amount.toFixed(2)}\n` +
-        `💳 *Payout Method:* ${targetReq.method} (${targetReq.upiId || targetReq.bankDetails?.accountNumber || 'Verified'})\n` +
-        `⚡ *Processed By:* @${username} (Pass Staff)\n` +
-        `🎉 *Status:* PAID & PASSED (#1)`;
+        `🆔 <b>Request ID:</b> #${targetReq.id}\n` +
+        `👤 <b>User:</b> ${targetReq.userName} (${targetReq.userTelegram})\n` +
+        `💵 <b>Amount:</b> ₹${targetReq.amount.toFixed(2)}\n` +
+        `💳 <b>Payout Method:</b> ${targetReq.method} (${targetReq.upiId || targetReq.bankDetails?.accountNumber || 'Verified'})\n` +
+        `⚡ <b>Processed By:</b> @${username} (Pass Staff)\n` +
+        `🎉 <b>Status:</b> PAID & PASSED (#1)`;
 
-      await sendTelegramMessage(chatId, passReceipt);
+      await sendTelegramMessage(chatId, passReceipt, undefined, 'HTML');
 
-      groupMessages.push({
+      const msgObj: GroupMessage = {
         id: `msg_${Date.now()}`,
         sender: `@${username} (Approval Group)`,
         senderRole: 'ADMIN',
@@ -298,18 +322,20 @@ async function handleTelegramUpdate(update: any) {
         timestamp: new Date().toISOString(),
         isSystemNotification: false,
         withdrawalRequestId: targetReq.id
-      });
+      };
+      groupMessages.push(msgObj);
+      FirestoreStorage.saveGroupMessage(msgObj);
     }
-  } else if (text.startsWith('#2') || text.startsWith('/refbonus')) {
+  } else if (text.startsWith('#2') || text.includes('#2') || text.startsWith('/refbonus') || text.startsWith('/2') || text.includes('#ref')) {
     // #2 HASHTAG REFERRAL BONUS COMMAND
-    const refInfo = `🎁 *REFERRAL & BONUS VERIFICATION (#2)*\n` +
+    const refInfo = `🎁 <b>REFERRAL & BONUS VERIFICATION (#2)</b>\n` +
       `------------------------------------\n` +
-      `📢 *Mandatory Group Join:* Must join @${settings.fastGroupUsername || 'AdEarn_FastWithdrawals'}\n` +
-      `👥 *Invite Code:* Enter your friend's Telegram ID or Username in Mini App\n` +
-      `💰 *Bonus Reward:* ₹${settings.referralReward || 5}.00 (${((settings.referralReward || 5) * 200).toLocaleString()} Coins) credited to both accounts!\n` +
-      `🔗 *Your Referral Link:*\nhttps://t.me/${settings.botUsername || 'PrimeAdsEbot'}?start=ref_${user.id}`;
+      `📢 <b>Mandatory Channel Join:</b> Must join @${settings.fastGroupUsername || 'AdEarn_FastWithdrawals'}\n` +
+      `👥 <b>Invite Bonus:</b> Enter your inviter's Telegram ID in Mini App\n` +
+      `💰 <b>Bonus Reward:</b> ₹${settings.referralReward || 5}.00 (${((settings.referralReward || 5) * 200).toLocaleString()} Coins) credited to both accounts!\n\n` +
+      `🔗 <b>Your Referral Link:</b>\nhttps://t.me/${settings.botUsername || 'PrimeAdsEbot'}?start=ref_${user.id}`;
     
-    await sendTelegramMessage(chatId, refInfo, keyboard);
+    await sendTelegramMessage(chatId, refInfo, keyboard, 'HTML');
   } else {
     const helpText = `🤖 *AdEarn Telegram Bot*\n\nAvailable commands:\n` +
       `/start - Launch Mini App & Welcome Bonus\n` +
@@ -378,19 +404,56 @@ async function startServer() {
 
   app.post("/api/settings", (req, res) => {
     const updated = req.body;
+    const oldMaintenance = settings.isMaintenanceMode;
     settings = { ...settings, ...updated };
 
-    // Post notification to group if settings changed
-    const sysMsg: GroupMessage = {
-      id: `msg_${Date.now()}`,
-      sender: "System Bot",
-      senderRole: "SYSTEM",
-      text: `⚙️ **SYSTEM SETTINGS UPDATED BY CEO**\n• Welcome Bonus: ₹${settings.welcomeBonus}\n• Per Ad Reward: ₹${settings.perAdReward}\n• Referral Reward: ₹${settings.referralReward}\n• Min Withdrawal: ₹${settings.minWithdrawal}\n• Min Ads Watch Required: ${settings.minAdsWatchForWithdrawal}\n• Commission: ${settings.referralCommissionPct}%`,
-      timestamp: new Date().toISOString(),
-      isSystemNotification: true
-    };
-    groupMessages.push(sysMsg);
+    // Detect Maintenance Mode Toggle & Auto-Broadcast to Telegram & Group
+    if (updated.isMaintenanceMode !== undefined && updated.isMaintenanceMode !== oldMaintenance) {
+      const modeText = settings.isMaintenanceMode
+        ? `🛠️ *SYSTEM MAINTENANCE MODE ACTIVATED*\n\n${settings.maintenanceMessage || 'All earning tasks and withdrawals are temporarily locked.'}\n\n📢 Please join our official channel @${settings.fastGroupUsername || 'AdEarn_FastWithdrawals'} for live updates!`
+        : `✅ *SYSTEM MAINTENANCE COMPLETED*\n\nAll earning tasks, ad watching, and withdrawal systems are now FULLY RESTORED! Tap to open Mini App and start earning!`;
 
+      // 1. Group Alert
+      const msgObj: GroupMessage = {
+        id: `msg_${Date.now()}`,
+        sender: "CEO Maintenance Guard",
+        senderRole: "SYSTEM",
+        text: modeText,
+        timestamp: new Date().toISOString(),
+        isSystemNotification: true
+      };
+      groupMessages.push(msgObj);
+      FirestoreStorage.saveGroupMessage(msgObj);
+
+      // 2. Broadcast via Telegram Bot to all registered users
+      users.forEach(u => {
+        if (!u.notifications) u.notifications = [];
+        u.notifications.unshift({
+          id: `notif_${Date.now()}_maint`,
+          type: 'SYSTEM_ALERT',
+          title: settings.isMaintenanceMode ? '🛠️ System Maintenance Lock' : '✅ System Back Online!',
+          message: settings.maintenanceMessage || (settings.isMaintenanceMode ? 'Tasks temporarily locked.' : 'Tasks unlocked!'),
+          read: false,
+          timestamp: new Date().toISOString()
+        });
+        FirestoreStorage.saveUser(u);
+        sendTelegramMessage(u.id, modeText);
+      });
+    } else {
+      // General settings update message
+      const sysMsg: GroupMessage = {
+        id: `msg_${Date.now()}`,
+        sender: "System Bot",
+        senderRole: "SYSTEM",
+        text: `⚙️ **SYSTEM SETTINGS UPDATED BY CEO**\n• Welcome Bonus: ₹${settings.welcomeBonus}\n• Per Ad Reward: ₹${settings.perAdReward}\n• Referral Reward: ₹${settings.referralReward}\n• Min Withdrawal: ₹${settings.minWithdrawal}\n• Min Ads Watch Required: ${settings.minAdsWatchForWithdrawal}\n• Commission: ${settings.referralCommissionPct}%`,
+        timestamp: new Date().toISOString(),
+        isSystemNotification: true
+      };
+      groupMessages.push(sysMsg);
+      FirestoreStorage.saveGroupMessage(sysMsg);
+    }
+
+    FirestoreStorage.saveSettings(settings);
     res.json({ success: true, settings });
   });
 
@@ -516,6 +579,7 @@ async function startServer() {
 
       users.push(user);
       addTransaction(user.id, 'GIFT_CLAIM', 'Welcome Joining Bonus', welcomeBonus * 200, welcomeBonus, 'Welcome registration reward credited');
+      FirestoreStorage.saveUser(user);
 
       if (referrerUser) {
         const refReward = settings.referralReward || 5;
@@ -528,17 +592,20 @@ async function startServer() {
           read: false,
           timestamp: new Date().toISOString()
         });
+        FirestoreStorage.saveUser(referrerUser);
 
         sendTelegramMessage(referrerUser.id, `🎉 *New Referral Joined!*\nUser @${user.username} (${user.firstName}) joined via your referral link! You will earn ₹${refReward} bonus when they watch 50 ads.`);
 
-        groupMessages.push({
+        const gMsg: GroupMessage = {
           id: `msg_${Date.now()}`,
           sender: "Referral Engine",
           senderRole: "SYSTEM",
           text: `👥 **NEW REFERRAL REGISTERED!**\nUser @${user.username} joined via referral link from @${referrerUser.username}.\n⏳ **Delayed Bonus Anti-Fraud:** ₹${refReward} (${refReward * 200} Coins) referral bonus will be credited to @${referrerUser.username} as soon as @${user.username} watches 50 Monetag ads!`,
           timestamp: new Date().toISOString(),
           isSystemNotification: true
-        });
+        };
+        groupMessages.push(gMsg);
+        FirestoreStorage.saveGroupMessage(gMsg);
       }
     } else {
       // Update username / name if changed
@@ -551,6 +618,7 @@ async function startServer() {
       if (settings.ownerTelegramId && (telegramId === settings.ownerTelegramId || user.id === settings.ownerTelegramId)) {
         user.role = 'CEO';
       }
+      FirestoreStorage.saveUser(user);
     }
 
     res.json(user);
@@ -562,6 +630,7 @@ async function startServer() {
     if (!user) return res.status(404).json({ error: "User not found" });
 
     user.hasJoinedFastGroup = true;
+    FirestoreStorage.saveUser(user);
     res.json({ success: true, message: "Verified! Joined Telegram Fast Withdrawal Group.", hasJoinedFastGroup: true });
   });
 
@@ -608,6 +677,8 @@ async function startServer() {
       read: false,
       timestamp: new Date().toISOString()
     });
+
+    FirestoreStorage.saveUser(user);
 
     res.json({
       success: true,
@@ -804,6 +875,7 @@ Answer user questions accurately, politely, and concisely based on these policie
         });
 
         sendTelegramMessage(referrerUser.id, `🎉 *Referral Bonus Credited!*\nYour friend @${user.username} watched 50 ads! ₹${refBonusAmount} (${refCoins.toLocaleString()} Coins) bonus credited to your balance!`);
+        FirestoreStorage.saveUser(referrerUser);
       }
     }
 
@@ -819,8 +891,11 @@ Answer user questions accurately, politely, and concisely based on these policie
         referrer.totalEarned = Number((referrer.totalCoinsEarned / 200).toFixed(2));
         referrer.referralEarnings += 0.005;
         addTransaction(referrer.id, 'COMMISSION', 'Referral 10% Ad Commission', 1, 0.005, `10% commission from @${user.username} ad watch`);
+        FirestoreStorage.saveUser(referrer);
       }
     }
+
+    FirestoreStorage.saveUser(user);
 
     res.json({
       success: true,
@@ -892,6 +967,7 @@ Answer user questions accurately, politely, and concisely based on these policie
     user.balance = Number((user.coins / 200).toFixed(2));
 
     addTransaction(user.id, 'WITHDRAWAL_REQUEST', 'Withdrawal Payout Request', -coinsToDeduct, -amount, `Payout requested via ${method}`);
+    FirestoreStorage.saveUser(user);
 
     const reqId = `${nextRequestId++}`;
     const newRequest: WithdrawalRequest = {
@@ -909,6 +985,7 @@ Answer user questions accurately, politely, and concisely based on these policie
     };
 
     withdrawalRequests.unshift(newRequest);
+    FirestoreStorage.saveWithdrawal(newRequest);
 
     // INSTANT NOTIFICATION TO FAST APPROVAL PRIVATE GROUP
     const methodDesc = method === 'UPI'
@@ -932,6 +1009,7 @@ ${methodDesc}
     };
 
     groupMessages.push(groupAlert);
+    FirestoreStorage.saveGroupMessage(groupAlert);
 
     res.json({
       success: true,
@@ -961,6 +1039,7 @@ ${methodDesc}
       request.processedAt = new Date().toISOString();
       request.processedBy = processedBy || 'Admin Fast Command';
       request.fastApproved = true;
+      FirestoreStorage.saveWithdrawal(request);
 
       if (user) {
         user.totalWithdrawn += request.amount;
@@ -975,11 +1054,12 @@ ${methodDesc}
           timestamp: new Date().toISOString()
         });
 
+        FirestoreStorage.saveUser(user);
         sendTelegramMessage(user.id, `⚡ *Withdrawal Approved & Paid!*\nYour payout request #${reqId} of ₹${request.amount.toFixed(2)} has been paid via ${request.method}!`);
       }
 
       // Send group confirmation
-      groupMessages.push({
+      const passMsg: GroupMessage = {
         id: `msg_${Date.now()}`,
         sender: processedBy || "Withdrawal Pass Admin",
         senderRole: "ADMIN",
@@ -990,7 +1070,9 @@ ${methodDesc}
         timestamp: new Date().toISOString(),
         isSystemNotification: false,
         withdrawalRequestId: reqId
-      });
+      };
+      groupMessages.push(passMsg);
+      FirestoreStorage.saveGroupMessage(passMsg);
 
       return res.json({ success: true, status: 'APPROVED', request });
     } else if (action === 'REJECT') {
@@ -998,6 +1080,7 @@ ${methodDesc}
       request.processedAt = new Date().toISOString();
       request.processedBy = processedBy || 'Admin';
       request.rejectionReason = rejectionReason || 'Details incorrect or policy review';
+      FirestoreStorage.saveWithdrawal(request);
 
       // Refund user balance & add notification
       if (user) {
@@ -1017,10 +1100,11 @@ ${methodDesc}
           timestamp: new Date().toISOString()
         });
 
+        FirestoreStorage.saveUser(user);
         sendTelegramMessage(user.id, `❌ *Withdrawal Rejected*\nYour payout request #${reqId} of ₹${request.amount.toFixed(2)} was rejected and refunded to your balance. Reason: ${rejectionReason || 'Invalid details'}`);
       }
 
-      groupMessages.push({
+      const rejMsg: GroupMessage = {
         id: `msg_${Date.now()}`,
         sender: processedBy || "Admin",
         senderRole: "ADMIN",
@@ -1031,7 +1115,9 @@ ${methodDesc}
         timestamp: new Date().toISOString(),
         isSystemNotification: false,
         withdrawalRequestId: reqId
-      });
+      };
+      groupMessages.push(rejMsg);
+      FirestoreStorage.saveGroupMessage(rejMsg);
 
       return res.json({ success: true, status: 'REJECTED', request });
     } else {
@@ -1105,6 +1191,7 @@ ${methodDesc}
       read: false,
       timestamp: new Date().toISOString()
     });
+    FirestoreStorage.saveUser(user);
 
     // Credit inviter
     inviter.coins = (inviter.coins || 0) + bonusCoins;
@@ -1126,6 +1213,7 @@ ${methodDesc}
       read: false,
       timestamp: new Date().toISOString()
     });
+    FirestoreStorage.saveUser(inviter);
 
     sendTelegramMessage(inviter.id, `🎉 *Referral Bonus Earned!*\nUser @${user.username || user.id} joined and claimed using your invite code! +₹${bonusInr.toFixed(2)} (${bonusCoins.toLocaleString()} Coins) credited to your balance!`);
 
@@ -1164,20 +1252,24 @@ ${methodDesc}
         timestamp: new Date().toISOString()
       });
       count++;
+      FirestoreStorage.saveUser(u);
 
       if (sendTelegram) {
         sendTelegramMessage(u.id, `📢 *${bTitle}*\n\n${bMsg}`);
       }
     });
 
-    groupMessages.push({
+    const bMsgObj: GroupMessage = {
       id: `msg_${Date.now()}`,
       sender: "CEO Global Broadcaster",
       senderRole: "SYSTEM",
       text: `📢 **${bTitle.toUpperCase()}**\n\n${bMsg}`,
       timestamp: new Date().toISOString(),
       isSystemNotification: true
-    });
+    };
+    groupMessages.push(bMsgObj);
+    FirestoreStorage.saveGroupMessage(bMsgObj);
+    FirestoreStorage.saveSettings(settings);
 
     res.json({
       success: true,
@@ -1255,6 +1347,7 @@ ${methodDesc}
     };
 
     supportTickets.unshift(newTicket);
+    FirestoreStorage.saveSupportTicket(newTicket);
 
     // Alert Admin Telegram if owner Telegram ID is configured
     if (settings.ownerTelegramId) {
@@ -1279,6 +1372,7 @@ ${methodDesc}
     ticket.reply = reply ? reply.trim() : ticket.reply;
     ticket.status = status || 'RESOLVED';
     ticket.updatedAt = new Date().toISOString();
+    FirestoreStorage.saveSupportTicket(ticket);
 
     // Add user notification
     const user = users.find(u => u.id === ticket.userId);
@@ -1292,6 +1386,7 @@ ${methodDesc}
         read: false,
         timestamp: new Date().toISOString()
       });
+      FirestoreStorage.saveUser(user);
 
       sendTelegramMessage(
         user.id,
@@ -1331,39 +1426,46 @@ ${methodDesc}
         withdrawalRequestId: reqId
       };
       groupMessages.push(userMsg);
+      FirestoreStorage.saveGroupMessage(userMsg);
 
       if (reqId && (actionCmd === 'PASS' || actionCmd === 'APPROVE' || actionCmd === 'REJECT')) {
         if (senderRole === 'USER') {
-          groupMessages.push({
+          const deniedMsg: GroupMessage = {
             id: `msg_${Date.now() + 1}`,
             sender: "Fast Approval Security Guard",
             senderRole: "SYSTEM",
             text: `⚠️ **ACCESS DENIED:** User \`${sender}\` is not authorized. Withdrawal pass commands can only be executed by Admins, CEO & Withdrawal Pass staff.`,
             timestamp: new Date().toISOString(),
             isSystemNotification: true
-          });
+          };
+          groupMessages.push(deniedMsg);
+          FirestoreStorage.saveGroupMessage(deniedMsg);
           return res.json({ success: true, message: "Logged, command blocked for USER role." });
         }
 
         const reqItem = withdrawalRequests.find(r => r.id === reqId);
         if (!reqItem) {
-          groupMessages.push({
+          const nfMsg: GroupMessage = {
             id: `msg_${Date.now() + 1}`,
             sender: "Fast Approval System",
             senderRole: "SYSTEM",
             text: `⚠️ Request \`#${reqId}\` not found. Please verify Request ID.`,
             timestamp: new Date().toISOString(),
             isSystemNotification: true
-          });
+          };
+          groupMessages.push(nfMsg);
+          FirestoreStorage.saveGroupMessage(nfMsg);
         } else if (reqItem.status !== 'PENDING') {
-          groupMessages.push({
+          const alrMsg: GroupMessage = {
             id: `msg_${Date.now() + 1}`,
             sender: "Fast Approval System",
             senderRole: "SYSTEM",
             text: `⚠️ Request \`#${reqId}\` is already ${reqItem.status}!`,
             timestamp: new Date().toISOString(),
             isSystemNotification: true
-          });
+          };
+          groupMessages.push(alrMsg);
+          FirestoreStorage.saveGroupMessage(alrMsg);
         } else {
           // Execute processing
           const action = actionCmd === 'REJECT' ? 'REJECT' : 'PASS';
@@ -1374,9 +1476,13 @@ ${methodDesc}
             reqItem.processedAt = new Date().toISOString();
             reqItem.processedBy = sender || 'Pass Admin';
             reqItem.fastApproved = true;
-            if (user) user.totalWithdrawn += reqItem.amount;
+            if (user) {
+              user.totalWithdrawn += reqItem.amount;
+              FirestoreStorage.saveUser(user);
+            }
+            FirestoreStorage.saveWithdrawal(reqItem);
 
-            groupMessages.push({
+            const sysPassMsg: GroupMessage = {
               id: `msg_${Date.now() + 2}`,
               sender: "Fast Approval Bot",
               senderRole: "SYSTEM",
@@ -1384,20 +1490,25 @@ ${methodDesc}
               timestamp: new Date().toISOString(),
               isSystemNotification: true,
               withdrawalRequestId: reqId
-            });
+            };
+            groupMessages.push(sysPassMsg);
+            FirestoreStorage.saveGroupMessage(sysPassMsg);
           } else {
             reqItem.status = 'REJECTED';
             reqItem.processedAt = new Date().toISOString();
             reqItem.processedBy = sender || 'Pass Admin';
             reqItem.rejectionReason = reason;
+            FirestoreStorage.saveWithdrawal(reqItem);
+
             if (user) {
               const coinsRefund = Math.round(reqItem.amount * 200);
               user.coins = (user.coins || 0) + coinsRefund;
               user.balance = Number((user.coins / 200).toFixed(2));
               addTransaction(user.id, 'WITHDRAWAL_REFUND', 'Withdrawal Refund', coinsRefund, reqItem.amount, `Refunded for rejected request #${reqId}`);
+              FirestoreStorage.saveUser(user);
             }
 
-            groupMessages.push({
+            const sysRejMsg: GroupMessage = {
               id: `msg_${Date.now() + 2}`,
               sender: "Fast Approval Bot",
               senderRole: "SYSTEM",
@@ -1405,7 +1516,9 @@ ${methodDesc}
               timestamp: new Date().toISOString(),
               isSystemNotification: true,
               withdrawalRequestId: reqId
-            });
+            };
+            groupMessages.push(sysRejMsg);
+            FirestoreStorage.saveGroupMessage(sysRejMsg);
           }
         }
       }
@@ -1423,6 +1536,7 @@ ${methodDesc}
       isSystemNotification: false
     };
     groupMessages.push(msg);
+    FirestoreStorage.saveGroupMessage(msg);
 
     res.json({ success: true, message: msg });
   });
@@ -1512,6 +1626,7 @@ ${methodDesc}
       sendTelegramMessage(user.id, `⚠️ *Balance Adjustment*\n₹${deductVal.toFixed(2)} (${deductCoins.toLocaleString()} Coins) was deducted from your account. Reason: ${reason || 'System adjustment'}`);
     }
 
+    FirestoreStorage.saveUser(user);
     res.json({ success: true, user });
   });
 

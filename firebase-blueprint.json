@@ -1,0 +1,90 @@
+{
+  "entities": {
+    "users": {
+      "title": "User Profile",
+      "description": "Stores user coin balances, stats, and referral data",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "username": { "type": "string" },
+        "firstName": { "type": "string" },
+        "coins": { "type": "number" },
+        "totalCoinsEarned": { "type": "number" },
+        "balance": { "type": "number" },
+        "totalEarned": { "type": "number" },
+        "totalWithdrawn": { "type": "number" },
+        "totalAdsWatched": { "type": "number" },
+        "adsWatchedToday": { "type": "number" },
+        "lastAdWatchedAt": { "type": "number" },
+        "watchedAdIds": { "type": "array", "items": { "type": "string" } },
+        "hasJoinedFastGroup": { "type": "boolean" },
+        "referredBy": { "type": "string" },
+        "referralCount": { "type": "number" },
+        "referralEarnings": { "type": "number" },
+        "referralBonusCredited": { "type": "boolean" },
+        "role": { "type": "string" },
+        "isBanned": { "type": "boolean" },
+        "joinedAt": { "type": "string" }
+      },
+      "required": ["id", "coins", "balance", "role"]
+    },
+    "settings": {
+      "title": "System Settings",
+      "description": "Global configuration and bot settings",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" }
+      }
+    },
+    "withdrawals": {
+      "title": "Withdrawals",
+      "description": "User cashout requests",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "amount": { "type": "number" },
+        "status": { "type": "string" }
+      }
+    },
+    "adminTeam": {
+      "title": "Admin Members",
+      "description": "Staff and CEO list",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "role": { "type": "string" }
+      }
+    },
+    "groupMessages": {
+      "title": "Group Messages",
+      "description": "Group chat and pass feed",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "text": { "type": "string" }
+      }
+    },
+    "transactions": {
+      "title": "Transactions Log",
+      "description": "Earning and deduction logs",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "coins": { "type": "number" }
+      }
+    },
+    "supportTickets": {
+      "title": "Support Tickets",
+      "description": "User query tickets",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "status": { "type": "string" }
+      }
+    }
+  }
+}

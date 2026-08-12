@@ -80,10 +80,10 @@ export const TelegramFrame: React.FC<TelegramFrameProps> = ({
                   onSelectMode('admin');
                   setShowUserDropdown(false);
                 }}
-                className="w-full mt-1 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-extrabold p-2.5 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-md transition-all active:scale-98"
+                className="w-full mt-1 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-medium p-2.5 rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all active:scale-98"
               >
-                <Shield className="w-4 h-4 text-slate-950" />
-                <span>🔑 Admin Panel (PIN Security Required)</span>
+                <Shield className="w-3.5 h-3.5 text-amber-400" />
+                <span>🔑 Staff & Admin Access (PIN)</span>
               </button>
             </div>
           )}

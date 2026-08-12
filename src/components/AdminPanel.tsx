@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, SystemSettings, WithdrawalRequest, AdminMember, UserRole, SupportTicket } from '../types';
 import { api } from '../services/api';
-import { Shield, Settings, Wallet, Users, Key, Save, CheckCircle2, AlertCircle, Zap, Ban, RefreshCw, Plus, Trash2, Search, Copy, Check, Lock, Unlock, Smartphone, TrendingUp, DollarSign, Eye, ArrowUpRight, RotateCcw, Headset, MessageSquare, Clock } from 'lucide-react';
+import { Shield, Settings, Wallet, Users, Key, Save, CheckCircle2, AlertCircle, Zap, Ban, RefreshCw, Plus, Trash2, Search, Copy, Check, Lock, Unlock, Smartphone, TrendingUp, DollarSign, Eye, ArrowUpRight, RotateCcw, Headset, MessageSquare, Clock, Send } from 'lucide-react';
 
 interface AdminPanelProps {
   currentUser: User;
@@ -243,8 +243,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const totalPaid = withdrawals.filter(w => w.status === 'APPROVED').reduce((acc, r) => acc + r.amount, 0);
   const totalAdsWatched = users.reduce((acc, u) => acc + (u.watchedAdIds?.length || u.adsWatchedToday || 0), 0);
 
-  // ROLE PROTECTION: Standard USER must enter Admin PIN (7788 or 9999) to elevate and access Admin Suite
-  if (currentUser.role === 'USER' && !isAuthenticated) {
+  // ROLE PROTECTION: Enforce Security PIN (9999 or 7788 for CEO, 8888 for Admin) to access Admin Suite
+  if (!isAuthenticated) {
     return (
       <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 text-center max-w-md mx-auto my-8 shadow-2xl space-y-4 font-sans">
         <div className="w-16 h-16 rounded-3xl bg-amber-950/80 border border-amber-800/80 text-amber-400 flex items-center justify-center mx-auto shadow-inner">
@@ -1122,6 +1122,86 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* TAB 6: SYSTEM BROADCASTING MODE */}
+      {activeTab === 'BROADCAST' && (
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-4 font-sans">
+          <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+            <h3 className="text-xs font-bold text-slate-200 flex items-center gap-2">
+              <MessageSquare className="w-4 h-4 text-amber-400" />
+              <span>Global Broadcasting Mode (CEO Broadcast System)</span>
+            </h3>
+            <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-full font-bold">
+              {users.length} Users Target
+            </span>
+          </div>
+
+          <form onSubmit={handleDispatchBroadcast} className="space-y-3">
+            <div className="space-y-1">
+              <label className="text-[11px] font-semibold text-slate-300">
+                Broadcast Headline Title:
+              </label>
+              <input
+                type="text"
+                value={broadcastTitle}
+                onChange={(e) => setBroadcastTitle(e.target.value)}
+                placeholder="e.g. 📢 BIG UPDATE / MAINTENANCE NOTICE"
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs font-bold text-amber-300 focus:outline-none focus:border-amber-500"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[11px] font-semibold text-slate-300">
+                Broadcast Announcement Message:
+              </label>
+              <textarea
+                rows={4}
+                value={broadcastMessageText}
+                onChange={(e) => setBroadcastMessageText(e.target.value)}
+                placeholder="Type your announcement message here... This will post as a live banner popup to all users, send via Telegram Bot, and post in the Telegram Channel!"
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-amber-500 placeholder-slate-600 font-sans leading-relaxed"
+              />
+            </div>
+
+            <div className="flex items-center justify-between bg-slate-950 p-3 rounded-xl border border-slate-800">
+              <div className="flex items-center gap-2">
+                <Send className="w-4 h-4 text-cyan-400" />
+                <span className="text-xs font-semibold text-slate-300">
+                  Send Direct Telegram Bot Message to Users & Channel Group
+                </span>
+              </div>
+              <input
+                type="checkbox"
+                checked={sendTelegramBroadcast}
+                onChange={(e) => setSendTelegramBroadcast(e.target.checked)}
+                className="w-4 h-4 rounded accent-amber-500"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={sendingBroadcast || !broadcastMessageText.trim()}
+              className="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 disabled:opacity-50 text-slate-950 font-black py-2.5 px-4 rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 transition-all active:scale-98"
+            >
+              {sendingBroadcast ? (
+                <span>Dispatching Broadcast...</span>
+              ) : (
+                <>
+                  <Send className="w-4 h-4" />
+                  <span>Dispatch Global Broadcast to All Users & Group</span>
+                </>
+              )}
+            </button>
+
+            {broadcastSuccess && (
+              <div className="p-3 rounded-xl bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 text-xs flex items-center gap-2 font-medium">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>{broadcastSuccess}</span>
+              </div>
+            )}
+          </form>
         </div>
       )}
 
