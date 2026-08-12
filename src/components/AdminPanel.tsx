@@ -36,13 +36,40 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [pinError, setPinError] = useState<string | null>(null);
 
   const isCeoRole = currentUser.role === 'CEO';
-  const [activeTab, setActiveTab] = useState<'SETTINGS' | 'WITHDRAWALS' | 'TEAM' | 'USERS' | 'SUPPORT'>('WITHDRAWALS');
+  const [activeTab, setActiveTab] = useState<'SETTINGS' | 'WITHDRAWALS' | 'TEAM' | 'USERS' | 'SUPPORT' | 'BROADCAST'>('WITHDRAWALS');
 
   // Support Tickets State
   const [supportTickets, setSupportTickets] = useState<SupportTicket[]>([]);
   const [supportFilter, setSupportFilter] = useState<'ALL' | 'OPEN' | 'RESOLVED'>('OPEN');
   const [supportReplyMap, setSupportReplyMap] = useState<Record<string, string>>({});
   const [replyingTicketId, setReplyingTicketId] = useState<string | null>(null);
+
+  // System Maintenance & Broadcasting State
+  const [isMaintenanceMode, setIsMaintenanceMode] = useState(settings.isMaintenanceMode ?? false);
+  const [maintenanceMessage, setMaintenanceMessage] = useState(settings.maintenanceMessage || '🛠️ System Maintenance Underway - All earning tasks are temporarily locked.');
+  const [broadcastTitle, setBroadcastTitle] = useState('📢 SYSTEM ANNOUNCEMENT');
+  const [broadcastMessageText, setBroadcastMessageText] = useState('');
+  const [sendTelegramBroadcast, setSendTelegramBroadcast] = useState(true);
+  const [sendingBroadcast, setSendingBroadcast] = useState(false);
+  const [broadcastSuccess, setBroadcastSuccess] = useState<string | null>(null);
+
+  const handleDispatchBroadcast = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!broadcastMessageText.trim()) return;
+    setSendingBroadcast(true);
+    setBroadcastSuccess(null);
+    try {
+      const res = await api.sendBroadcast(broadcastTitle, broadcastMessageText.trim(), sendTelegramBroadcast);
+      setBroadcastSuccess(res.message || 'Broadcast successfully dispatched!');
+      setBroadcastMessageText('');
+      setTimeout(() => setBroadcastSuccess(null), 4000);
+    } catch (err: any) {
+      console.error(err);
+      alert(err.message || 'Failed to dispatch broadcast');
+    } finally {
+      setSendingBroadcast(false);
+    }
+  };
 
   const fetchSupportTickets = async () => {
     try {
@@ -153,7 +180,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         botToken,
         botAppUrl,
         disableTelegramPolling,
-        ownerTelegramId
+        ownerTelegramId,
+        isMaintenanceMode,
+        maintenanceMessage
       });
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
@@ -443,6 +472,22 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             </span>
           )}
         </button>
+
+        <button
+          onClick={() => isCeoRole && setActiveTab('BROADCAST')}
+          disabled={!isCeoRole}
+          className={`flex items-center gap-1.5 px-3 py-2 rounded-xl font-bold transition-all whitespace-nowrap ${
+            activeTab === 'BROADCAST'
+              ? 'bg-amber-600 text-white shadow-md'
+              : isCeoRole
+              ? 'text-slate-400 hover:text-slate-200 cursor-pointer'
+              : 'text-slate-600 cursor-not-allowed opacity-60'
+          }`}
+        >
+          <MessageSquare className="w-3.5 h-3.5" />
+          <span>Broadcasting Mode</span>
+          {!isCeoRole && <Lock className="w-3 h-3 text-amber-500" />}
+        </button>
       </div>
 
       {/* TAB 1: SYSTEM SETTINGS */}
@@ -458,6 +503,51 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               <span className="text-emerald-400 text-xs font-bold flex items-center gap-1">
                 <CheckCircle2 className="w-4 h-4" /> Changes Saved!
               </span>
+            )}
+          </div>
+
+          {/* SYSTEM MAINTENANCE MODE CONTROL CARD */}
+          <div className={`p-4 rounded-2xl border transition-all ${isMaintenanceMode ? 'bg-rose-950/60 border-rose-500/80' : 'bg-slate-950/80 border-slate-800'} space-y-3`}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold ${isMaintenanceMode ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40' : 'bg-slate-800 text-slate-400'}`}>
+                  {isMaintenanceMode ? <Lock className="w-4 h-4 text-rose-400" /> : <Unlock className="w-4 h-4 text-emerald-400" />}
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
+                    System Maintenance Lock Mode
+                    {isMaintenanceMode && <span className="text-[10px] bg-rose-500 text-white font-black px-2 py-0.2 rounded-full animate-pulse">ACTIVE LOCK</span>}
+                  </h4>
+                  <p className="text-[10px] text-slate-400">
+                    When active, all user earning tasks (Ads, Check-in, Referral Claims, Withdrawals) are completely locked.
+                  </p>
+                </div>
+              </div>
+
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={isMaintenanceMode}
+                  onChange={(e) => setIsMaintenanceMode(e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-rose-600"></div>
+              </label>
+            </div>
+
+            {isMaintenanceMode && (
+              <div className="space-y-1 pt-1">
+                <label className="text-[11px] font-semibold text-rose-300">
+                  Custom Maintenance Lock Message Displayed To Users:
+                </label>
+                <input
+                  type="text"
+                  value={maintenanceMessage}
+                  onChange={(e) => setMaintenanceMessage(e.target.value)}
+                  placeholder="e.g. 🛠️ System Maintenance Underway. Tasks locked."
+                  className="w-full bg-slate-900 border border-rose-800/80 rounded-xl px-3 py-2 text-xs font-medium text-rose-200 focus:outline-none focus:border-rose-500"
+                />
+              </div>
             )}
           </div>
 

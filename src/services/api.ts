@@ -119,6 +119,30 @@ export const api = {
     return await res.json();
   },
 
+  // Referral Bonus Claim (Mandatory Group Join + Invite Code)
+  claimReferralBonus: async (userId: string, inviteCode: string) => {
+    const res = await fetch('/api/referral/claim-bonus', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, inviteCode })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to claim referral bonus');
+    return data;
+  },
+
+  // Admin Broadcast Announcement
+  sendBroadcast: async (title: string, message: string, sendTelegram: boolean = true) => {
+    const res = await fetch('/api/admin/broadcast', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title, message, sendTelegram })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to dispatch broadcast');
+    return data;
+  },
+
   // Ad Watching
   watchAd: async (userId: string, adId?: string) => {
     const res = await fetch(`/api/users/${userId}/watch-ad`, {

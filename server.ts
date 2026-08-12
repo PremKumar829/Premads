@@ -247,6 +247,69 @@ async function handleTelegramUpdate(update: any) {
       `💬 *Official Telegram Channel:* @${settings.fastGroupUsername || 'AdEarn_FastWithdrawals'}\n` +
       `⚡ *Support Availability:* 24/7 Fast Response`;
     await sendTelegramMessage(chatId, suppText, keyboard);
+  } else if (text.startsWith('#1') || text.startsWith('/pass')) {
+    // #1 HASHTAG FAST WITHDRAWAL PASS COMMAND FOR TELEGRAM APPROVAL GROUP
+    const parts = text.replace(/^#1/, '').replace(/^\/pass/, '').trim().split(/\s+/);
+    const reqId = parts[0];
+    
+    // Find pending request matching ID or get first pending request
+    let targetReq = reqId ? withdrawalRequests.find(r => r.id === reqId && r.status === 'PENDING') : withdrawalRequests.find(r => r.status === 'PENDING');
+    
+    if (!targetReq) {
+      await sendTelegramMessage(chatId, `⚠️ *Withdrawal Pass Guard (#1)*\nNo pending withdrawal request found for ID: \`${reqId || 'Latest'}\`. Please verify Request ID.`);
+    } else {
+      targetReq.status = 'APPROVED';
+      targetReq.processedAt = new Date().toISOString();
+      targetReq.processedBy = `@${username} (Telegram Approval Guard)`;
+      targetReq.fastApproved = true;
+
+      const reqUser = users.find(u => u.id === targetReq.userId);
+      if (reqUser) {
+        reqUser.totalWithdrawn += targetReq.amount;
+        if (!reqUser.notifications) reqUser.notifications = [];
+        reqUser.notifications.unshift({
+          id: `notif_${Date.now()}`,
+          type: 'WITHDRAWAL_APPROVED',
+          title: '⚡ Withdrawal Approved & Paid!',
+          message: `Your payout request #${targetReq.id} of ₹${targetReq.amount.toFixed(2)} has been paid!`,
+          amount: targetReq.amount,
+          read: false,
+          timestamp: new Date().toISOString()
+        });
+        sendTelegramMessage(reqUser.id, `⚡ *Withdrawal Approved & Paid! (#1)*\nYour payout request #${targetReq.id} of ₹${targetReq.amount.toFixed(2)} has been processed and paid!`);
+      }
+
+      const passReceipt = `✅ *WITHDRAWAL PASSED & APPROVED (#1)*\n` +
+        `------------------------------------\n` +
+        `🆔 *Request ID:* #${targetReq.id}\n` +
+        `👤 *User:* ${targetReq.userName} (${targetReq.userTelegram})\n` +
+        `💵 *Amount:* ₹${targetReq.amount.toFixed(2)}\n` +
+        `💳 *Payout Method:* ${targetReq.method} (${targetReq.upiId || targetReq.bankDetails?.accountNumber || 'Verified'})\n` +
+        `⚡ *Processed By:* @${username} (Pass Staff)\n` +
+        `🎉 *Status:* PAID & PASSED (#1)`;
+
+      await sendTelegramMessage(chatId, passReceipt);
+
+      groupMessages.push({
+        id: `msg_${Date.now()}`,
+        sender: `@${username} (Approval Group)`,
+        senderRole: 'ADMIN',
+        text: passReceipt,
+        timestamp: new Date().toISOString(),
+        isSystemNotification: false,
+        withdrawalRequestId: targetReq.id
+      });
+    }
+  } else if (text.startsWith('#2') || text.startsWith('/refbonus')) {
+    // #2 HASHTAG REFERRAL BONUS COMMAND
+    const refInfo = `🎁 *REFERRAL & BONUS VERIFICATION (#2)*\n` +
+      `------------------------------------\n` +
+      `📢 *Mandatory Group Join:* Must join @${settings.fastGroupUsername || 'AdEarn_FastWithdrawals'}\n` +
+      `👥 *Invite Code:* Enter your friend's Telegram ID or Username in Mini App\n` +
+      `💰 *Bonus Reward:* ₹${settings.referralReward || 5}.00 (${((settings.referralReward || 5) * 200).toLocaleString()} Coins) credited to both accounts!\n` +
+      `🔗 *Your Referral Link:*\nhttps://t.me/${settings.botUsername || 'PrimeAdsEbot'}?start=ref_${user.id}`;
+    
+    await sendTelegramMessage(chatId, refInfo, keyboard);
   } else {
     const helpText = `🤖 *AdEarn Telegram Bot*\n\nAvailable commands:\n` +
       `/start - Launch Mini App & Welcome Bonus\n` +
@@ -254,7 +317,9 @@ async function handleTelegramUpdate(update: any) {
       `/withdraw - Check Withdrawal Status\n` +
       `/refer - Get Referral Link\n` +
       `/checkin - Claim Daily 50 Coins\n` +
-      `/support - Contact CEO & Support\n\n` +
+      `/support - Contact CEO & Support\n` +
+      `#1 - Approve & Pass Withdrawal Request\n` +
+      `#2 - Referral Bonus & Group Verification\n\n` +
       `Tap below to open the Mini App:`;
     await sendTelegramMessage(chatId, helpText, keyboard);
   }
@@ -502,6 +567,10 @@ async function startServer() {
 
   // DAILY CHECK-IN ENDPOINT
   app.post("/api/users/:id/daily-checkin", (req, res) => {
+    if (settings.isMaintenanceMode) {
+      return res.status(403).json({ error: settings.maintenanceMessage || "🛠️ System is under maintenance. All earning tasks are locked temporarily." });
+    }
+
     const user = users.find(u => u.id === req.params.id);
     if (!user) return res.status(404).json({ error: "User not found" });
 
@@ -644,6 +713,10 @@ Answer user questions accurately, politely, and concisely based on these policie
 
   // WATCH AD ENDPOINT
   app.post("/api/users/:id/watch-ad", (req, res) => {
+    if (settings.isMaintenanceMode) {
+      return res.status(403).json({ error: settings.maintenanceMessage || "🛠️ System is under maintenance. All earning tasks are locked temporarily." });
+    }
+
     const userId = req.params.id;
     const { adId } = req.body || {};
     const user = users.find(u => u.id === userId);
@@ -772,6 +845,10 @@ Answer user questions accurately, politely, and concisely based on these policie
   });
 
   app.post("/api/withdrawals", (req, res) => {
+    if (settings.isMaintenanceMode) {
+      return res.status(403).json({ error: settings.maintenanceMessage || "🛠️ System is under maintenance. Withdrawals are temporarily locked." });
+    }
+
     const { userId, amount, method, upiId, bankDetails } = req.body;
     const user = users.find(u => u.id === userId);
 
@@ -960,6 +1037,153 @@ ${methodDesc}
     } else {
       return res.status(400).json({ error: "Invalid action. Use PASS, APPROVE, or REJECT." });
     }
+  });
+
+  // CLAIM REFERRAL BONUS ENDPOINT (Requires Group Join + Inviter Code)
+  app.post("/api/referral/claim-bonus", (req, res) => {
+    const { userId, inviteCode } = req.body;
+
+    if (settings.isMaintenanceMode) {
+      return res.status(403).json({ error: settings.maintenanceMessage || "🛠️ System is under maintenance. Referral claims are temporarily locked." });
+    }
+
+    const user = users.find(u => u.id === userId);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    if (user.isBanned) {
+      return res.status(403).json({ error: "Account is restricted." });
+    }
+
+    // MANDATORY REQUIREMENT 1: User must join Telegram Channel / Group first
+    if (!user.hasJoinedFastGroup) {
+      return res.status(400).json({
+        error: "⚠️ Group Join Required! You MUST join our official Telegram channel (@AdEarn_FastWithdrawals) before claiming referral bonus!"
+      });
+    }
+
+    // MANDATORY REQUIREMENT 2: User can only claim once
+    if (user.hasClaimedReferralBonus) {
+      return res.status(400).json({ error: "You have already claimed your referral bonus!" });
+    }
+
+    const cleanCode = (inviteCode || '').replace(/^@/, '').trim();
+    if (!cleanCode) {
+      return res.status(400).json({ error: "Please enter a valid Referral / Invite Code!" });
+    }
+
+    // Find inviter in users by ID or Username (excluding self)
+    const inviter = users.find(u =>
+      (u.id === cleanCode || (u.username && u.username.toLowerCase() === cleanCode.toLowerCase())) &&
+      u.id !== user.id
+    );
+
+    if (!inviter) {
+      return res.status(400).json({ error: "Invalid Invite Code! User not found or you cannot enter your own invite code." });
+    }
+
+    // Credit referral bonus to both user & inviter
+    const bonusInr = settings.referralReward || 5;
+    const bonusCoins = bonusInr * 200;
+
+    user.coins = (user.coins || 0) + bonusCoins;
+    user.totalCoinsEarned = (user.totalCoinsEarned || 0) + bonusCoins;
+    user.balance = Number((user.coins / 200).toFixed(2));
+    user.totalEarned = Number((user.totalCoinsEarned / 200).toFixed(2));
+    user.hasClaimedReferralBonus = true;
+    user.claimedReferralCode = cleanCode;
+    user.referredBy = inviter.id;
+
+    addTransaction(user.id, 'REFERRAL_BONUS', 'Referral Claim Bonus', bonusCoins, bonusInr, `Claimed referral invite code from @${inviter.username || inviter.id}`);
+
+    if (!user.notifications) user.notifications = [];
+    user.notifications.unshift({
+      id: `notif_${Date.now()}`,
+      type: 'REFERRAL_SUCCESS',
+      title: '🎉 Referral Bonus Claimed!',
+      message: `+${bonusCoins.toLocaleString()} Coins (₹${bonusInr.toFixed(2)}) credited using invite code @${inviter.username || inviter.id}!`,
+      amount: bonusInr,
+      read: false,
+      timestamp: new Date().toISOString()
+    });
+
+    // Credit inviter
+    inviter.coins = (inviter.coins || 0) + bonusCoins;
+    inviter.totalCoinsEarned = (inviter.totalCoinsEarned || 0) + bonusCoins;
+    inviter.balance = Number((inviter.coins / 200).toFixed(2));
+    inviter.totalEarned = Number((inviter.totalCoinsEarned / 200).toFixed(2));
+    inviter.referralCount = (inviter.referralCount || 0) + 1;
+    inviter.referralEarnings += bonusInr;
+
+    addTransaction(inviter.id, 'REFERRAL_BONUS', 'Referral Invite Earned', bonusCoins, bonusInr, `User @${user.username || user.id} claimed using your invite code`);
+
+    if (!inviter.notifications) inviter.notifications = [];
+    inviter.notifications.unshift({
+      id: `notif_${Date.now()}_inv`,
+      type: 'REFERRAL_SUCCESS',
+      title: '🎉 Referral Bonus Earned!',
+      message: `@${user.username || user.id} claimed using your invite code! +₹${bonusInr.toFixed(2)} (${bonusCoins.toLocaleString()} Coins) credited!`,
+      amount: bonusInr,
+      read: false,
+      timestamp: new Date().toISOString()
+    });
+
+    sendTelegramMessage(inviter.id, `🎉 *Referral Bonus Earned!*\nUser @${user.username || user.id} joined and claimed using your invite code! +₹${bonusInr.toFixed(2)} (${bonusCoins.toLocaleString()} Coins) credited to your balance!`);
+
+    res.json({
+      success: true,
+      message: `🎉 Referral Bonus of ₹${bonusInr.toFixed(2)} (${bonusCoins.toLocaleString()} Coins) claimed successfully!`,
+      rewardInr: bonusInr,
+      coinsEarned: bonusCoins,
+      newCoins: user.coins,
+      newBalance: user.balance
+    });
+  });
+
+  // ADMIN BROADCAST ENDPOINT
+  app.post("/api/admin/broadcast", (req, res) => {
+    const { title, message, sendTelegram } = req.body;
+    if (!message || typeof message !== 'string') {
+      return res.status(400).json({ error: "Broadcast message text is required." });
+    }
+
+    const bTitle = title || "📢 SYSTEM BROADCAST";
+    const bMsg = message.trim();
+
+    // Set active banner in settings
+    settings.broadcastMessage = `${bTitle}: ${bMsg}`;
+
+    let count = 0;
+    users.forEach(u => {
+      if (!u.notifications) u.notifications = [];
+      u.notifications.unshift({
+        id: `notif_${Date.now()}_${Math.random()}`,
+        type: 'SYSTEM_ALERT',
+        title: bTitle,
+        message: bMsg,
+        read: false,
+        timestamp: new Date().toISOString()
+      });
+      count++;
+
+      if (sendTelegram) {
+        sendTelegramMessage(u.id, `📢 *${bTitle}*\n\n${bMsg}`);
+      }
+    });
+
+    groupMessages.push({
+      id: `msg_${Date.now()}`,
+      sender: "CEO Global Broadcaster",
+      senderRole: "SYSTEM",
+      text: `📢 **${bTitle.toUpperCase()}**\n\n${bMsg}`,
+      timestamp: new Date().toISOString(),
+      isSystemNotification: true
+    });
+
+    res.json({
+      success: true,
+      message: `Broadcast successfully dispatched to ${count} registered users!`,
+      userCount: count
+    });
   });
 
   // ADMIN TEAM MANAGEMENT

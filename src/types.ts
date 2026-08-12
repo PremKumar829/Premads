@@ -49,6 +49,9 @@ export interface SystemSettings {
   botAppUrl?: string;              // e.g. "https://premads.onrender.com"
   disableTelegramPolling?: boolean;// Turn off AI Studio polling to prevent double replies when deployed on Render
   ownerTelegramId?: string;        // e.g. "826258444"
+  isMaintenanceMode?: boolean;     // When true, all earning tasks are locked
+  maintenanceMessage?: string;     // Custom message displayed during maintenance
+  broadcastMessage?: string;       // Active system broadcast announcement banner
 }
 
 export interface User {
@@ -65,11 +68,13 @@ export interface User {
   lastAdWatchedAt: number;         // Timestamp ms
   lastCheckInAt?: number;          // Timestamp ms for 24h daily check-in
   watchedAdIds: string[];          // Tracked Ad IDs watched by this user
-  hasJoinedFastGroup: boolean;     // Must join Telegram group for fast withdrawals
+  hasJoinedFastGroup: boolean;     // Must join Telegram group for fast withdrawals & referral claims
   referredBy: string | null;       // Referrer ID
   referralCount: number;
   referralEarnings: number;
   referralBonusCredited?: boolean; // True when delayed 50-ad referral bonus credited to inviter
+  hasClaimedReferralBonus?: boolean; // True if user claimed referral bonus using invite code
+  claimedReferralCode?: string;    // The invite code user entered
   notifications?: UserNotification[];
   role: UserRole;
   isBanned: boolean;

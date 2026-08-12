@@ -20,7 +20,10 @@ export const initialSettings: SystemSettings = {
   botToken: '7890123456:AAFx_PrimeAdsEbotTokenDemoKey',
   botAppUrl: 'https://premads.onrender.com',
   disableTelegramPolling: true,
-  ownerTelegramId: '826258444'
+  ownerTelegramId: '826258444',
+  isMaintenanceMode: false,
+  maintenanceMessage: '🛠️ System Maintenance Underway - All earning tasks and withdrawals are temporarily locked. Please check back soon!',
+  broadcastMessage: '📢 Welcome to Prime Ads! Join our official Telegram channel @AdEarn_FastWithdrawals for daily updates & fast payout approvals.'
 };
 
 export const availableAdCatalog: AdItem[] = [
