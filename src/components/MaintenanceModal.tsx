@@ -49,7 +49,7 @@ export const MaintenanceModal: React.FC<MaintenanceModalProps> = ({
         setIsDisabling(false);
       }
     } else {
-      setPinError('Invalid CEO PIN! Enter PIN 9999 to disable maintenance.');
+      setPinError('Invalid Security PIN! Please check and try again.');
     }
   };
 
@@ -139,12 +139,12 @@ export const MaintenanceModal: React.FC<MaintenanceModalProps> = ({
               className="text-[11px] text-amber-400 hover:text-amber-300 underline font-medium flex items-center justify-center gap-1 mx-auto pt-1"
             >
               <Key className="w-3 h-3" />
-              <span>Have CEO PIN? Enter PIN to Disable Maintenance</span>
+              <span>Enter Security PIN to Disable Maintenance</span>
             </button>
           ) : (
             <form onSubmit={handleQuickDisableWithPin} className="bg-slate-950 p-3 rounded-2xl border border-amber-500/30 space-y-2">
               <div className="text-[11px] font-bold text-amber-300 flex items-center justify-between">
-                <span>Enter CEO PIN (Default: 9999)</span>
+                <span>Enter Admin / CEO Pass PIN</span>
                 <button
                   type="button"
                   onClick={() => setShowPinInput(false)}
@@ -155,7 +155,7 @@ export const MaintenanceModal: React.FC<MaintenanceModalProps> = ({
               </div>
               <input
                 type="password"
-                placeholder="Enter PIN 9999"
+                placeholder="Enter PIN..."
                 value={pin}
                 onChange={(e) => setPin(e.target.value)}
                 maxLength={8}

@@ -328,6 +328,8 @@ export default function App() {
                   user={currentUser}
                   settings={settings}
                   allUsers={users}
+                  onVerifyGroup={handleVerifyGroupJoin}
+                  onRefreshUser={refreshAllData}
                 />
               )}
 

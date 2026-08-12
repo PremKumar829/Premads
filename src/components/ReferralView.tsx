@@ -22,19 +22,60 @@ export const ReferralView: React.FC<ReferralViewProps> = ({
 
   // Referral Claim State
   const [inviteCodeInput, setInviteCodeInput] = useState('');
+  const [autoFetchedFromLink, setAutoFetchedFromLink] = useState(false);
   const [claimingBonus, setClaimingBonus] = useState(false);
+  const [verifyingGroupState, setVerifyingGroupState] = useState(false);
   const [claimError, setClaimError] = useState<string | null>(null);
   const [claimSuccess, setClaimSuccess] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (user.referredBy) {
+      const inviterObj = allUsers.find(u => u.id === user.referredBy);
+      const codeToFill = inviterObj?.username ? `@${inviterObj.username}` : user.referredBy;
+      setInviteCodeInput(codeToFill);
+      setAutoFetchedFromLink(true);
+    } else {
+      if (typeof window !== 'undefined') {
+        const urlParams = new URLSearchParams(window.location.search);
+        const startParam = urlParams.get('tgWebAppStartParam') || urlParams.get('start') || urlParams.get('ref') || urlParams.get('startapp');
+        if (startParam) {
+          const cleanRef = startParam.replace(/^ref_/, '').replace(/^@/, '');
+          const inviterObj = allUsers.find(u => u.id === cleanRef || (u.username && u.username.toLowerCase() === cleanRef.toLowerCase()));
+          if (inviterObj) {
+            setInviteCodeInput(inviterObj.username ? `@${inviterObj.username}` : inviterObj.id);
+            setAutoFetchedFromLink(true);
+          } else if (cleanRef) {
+            setInviteCodeInput(cleanRef);
+            setAutoFetchedFromLink(true);
+          }
+        }
+      }
+    }
+  }, [user.referredBy, allUsers]);
+
+  const handleManualGroupVerify = async () => {
+    setClaimError(null);
+    setClaimSuccess(null);
+    setVerifyingGroupState(true);
+    try {
+      if (onVerifyGroup) {
+        await onVerifyGroup();
+      } else {
+        await api.verifyGroupJoin(user.id);
+      }
+      setClaimSuccess("✅ Channel Membership Verified! Step 1 complete.");
+      if (onRefreshUser) onRefreshUser();
+    } catch (err: any) {
+      setClaimError(err.message || 'Failed to verify channel membership');
+    } finally {
+      setVerifyingGroupState(false);
+    }
+  };
 
   const handleClaimReferralCode = async (e: React.FormEvent) => {
     e.preventDefault();
     setClaimError(null);
     setClaimSuccess(null);
-
-    if (!user.hasJoinedFastGroup) {
-      setClaimError("⚠️ Group Join Required! You must join our official Telegram channel first before claiming referral bonus.");
-      return;
-    }
 
     if (!inviteCodeInput.trim()) {
       setClaimError("Please enter your inviter's referral / invite code!");
@@ -43,6 +84,15 @@ export const ReferralView: React.FC<ReferralViewProps> = ({
 
     setClaimingBonus(true);
     try {
+      // Auto-verify group join if not verified yet
+      if (!user.hasJoinedFastGroup) {
+        if (onVerifyGroup) {
+          await onVerifyGroup();
+        } else {
+          await api.verifyGroupJoin(user.id);
+        }
+      }
+
       const res = await api.claimReferralBonus(user.id, inviteCodeInput.trim());
       setClaimSuccess(res.message || `🎉 Referral bonus of ₹${res.rewardInr || settings.referralReward} credited!`);
       setInviteCodeInput('');
@@ -140,16 +190,33 @@ export const ReferralView: React.FC<ReferralViewProps> = ({
             </span>
 
             {!user.hasJoinedFastGroup && (
-              <a
-                href={`https://t.me/${settings.fastGroupUsername || 'AdEarn_FastWithdrawals'}`}
-                target="_blank"
-                rel="noreferrer"
-                onClick={onVerifyGroup}
-                className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-2.5 py-1 rounded-lg text-[10px] flex items-center gap-1 transition-all"
-              >
-                <span>Join Channel</span>
-                <ArrowRight className="w-3 h-3" />
-              </a>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <a
+                  href={`https://t.me/${settings.fastGroupUsername || 'AdEarn_FastWithdrawals'}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-2.5 py-1 rounded-lg text-[10px] flex items-center gap-1 transition-all"
+                >
+                  <span>Join Channel</span>
+                  <ArrowRight className="w-3 h-3" />
+                </a>
+
+                <button
+                  type="button"
+                  onClick={handleManualGroupVerify}
+                  disabled={verifyingGroupState}
+                  className="bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 font-bold px-2.5 py-1 rounded-lg text-[10px] flex items-center gap-1 transition-all"
+                >
+                  {verifyingGroupState ? (
+                    <span>Verifying...</span>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="w-3 h-3" />
+                      <span>Verify Joined</span>
+                    </>
+                  )}
+                </button>
+              </div>
             )}
           </div>
           <p className="text-[10px] text-slate-300">
@@ -170,9 +237,19 @@ export const ReferralView: React.FC<ReferralViewProps> = ({
           </div>
         ) : (
           <form onSubmit={handleClaimReferralCode} className="space-y-2.5">
+            {autoFetchedFromLink && inviteCodeInput && (
+              <div className="bg-cyan-950/40 border border-cyan-500/30 rounded-lg p-2 text-[11px] text-cyan-300 flex items-center justify-between">
+                <span className="flex items-center gap-1.5 font-medium">
+                  <Sparkles className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
+                  Auto-Fetched From Referral Link: <strong className="font-mono text-white">{inviteCodeInput}</strong>
+                </span>
+                <span className="text-[9px] bg-cyan-500/20 text-cyan-300 px-1.5 py-0.5 rounded font-bold">LINK VERIFIED</span>
+              </div>
+            )}
+
             <div className="space-y-1">
               <label className="text-[11px] font-semibold text-slate-300">
-                Enter Inviter's Telegram ID or Username:
+                Inviter's Referral / Invite Code:
               </label>
               <div className="flex items-center gap-2">
                 <input

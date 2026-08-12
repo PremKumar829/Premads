@@ -84,9 +84,17 @@ export const BotSimulatorView: React.FC<BotSimulatorViewProps> = ({
         const adsLeft = Math.max(0, 100 - (user.totalAdsWatched || 0));
         botReply = `💳 *Withdrawal Center*\n\nAvailable Balance: ${(user.coins || 0).toLocaleString()} Coins (≈ ₹${user.balance.toFixed(2)})\nMinimum Payout: 10,000 Coins (₹50)\nAds Watched Progress: ${user.totalAdsWatched || 0} / 100\n\n${adsLeft === 0 ? '✅ Status: UNLOCKED! Ready for instant UPI payout.' : `⚠️ Status: LOCKED. Need ${adsLeft} more ads.`}`;
         buttons = [{ text: '💸 Open Withdrawal Page', action: 'OPEN_WITHDRAW' }];
-      } else if (cleanCmd === '/refer') {
-        botReply = `👥 *Referral Program*\nYour link: \`https://t.me/${settings.botUsername}?start=ref_${user.id}\`\nEarn bonus when your friend watches 50 ads + 10% lifetime commission!`;
-        buttons = [{ text: '👥 View Referrals', action: 'OPEN_REFER' }];
+      } else if (cleanCmd === '/refer' || cleanCmd.startsWith('#2') || cleanCmd.startsWith('/2')) {
+        const cleanedText = txt.replace(/#2/gi, '').replace(/\/2/gi, '').trim();
+        if (cleanedText) {
+          botReply = `🎉 <b>REFERRAL BONUS CLAIMED SUCCESSFULLY! (#2)</b>\n------------------------------------\n👤 <b>User:</b> ${user.firstName}\n🎁 <b>Bonus Credited:</b> ₹${settings.referralReward || 5}.00 (${((settings.referralReward || 5) * 200).toLocaleString()} Coins)\n📢 <b>Group Join Status:</b> VERIFIED ✅ (@${settings.fastGroupUsername || 'AdEarn_FastWithdrawals'})`;
+        } else {
+          botReply = `🎁 <b>REFERRAL & GROUP VERIFICATION (#2)</b>\n------------------------------------\n✅ <b>Channel Join Status:</b> VERIFIED (@${settings.fastGroupUsername || 'AdEarn_FastWithdrawals'})\n👥 <b>Claim Bonus Command:</b> <code>#2 &lt;INVITER_ID_OR_USERNAME&gt;</code>\n💡 <b>Example:</b> <code>#2 @PremSargam88</code> or <code>#2 ${user.id}</code>\n💰 <b>Bonus Reward:</b> ₹${settings.referralReward || 5}.00 (${((settings.referralReward || 5) * 200).toLocaleString()} Coins)\n\n🔗 <b>Your Referral Link:</b>\nhttps://t.me/${settings.botUsername}?start=ref_${user.id}`;
+        }
+        buttons = [
+          { text: '🚀 Open Mini App', action: 'OPEN_MINIAPP' },
+          { text: '👥 View Referrals', action: 'OPEN_REFER' }
+        ];
       } else if (txt.startsWith(settings.fastApprovalHashtag || '#1')) {
         onSendBotCommand(txt);
         botReply = `⚡ *Fast Hashtag Command Dispatched!*\nCommand \`${txt}\` forwarded to system engine.`;

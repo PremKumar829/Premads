@@ -80,6 +80,36 @@ function addTransaction(userId: string, type: any, title: string, coins: number,
 }
 
 // Telegram Bot Helpers & Polling
+async function checkTelegramGroupMember(userId: string, channelUsername?: string): Promise<{ isMember: boolean; channel: string; status?: string }> {
+  const targetChannel = (channelUsername || settings.fastGroupUsername || 'AdEarn_FastWithdrawals')
+    .trim()
+    .replace(/^https:\/\/t\.me\//, '')
+    .replace(/^@/, '');
+  const cleanChatId = `@${targetChannel}`;
+
+  if (!settings.botToken || settings.botToken === 'YOUR_BOT_TOKEN_HERE') {
+    return { isMember: true, channel: cleanChatId, status: 'simulated' };
+  }
+
+  try {
+    const url = `https://api.telegram.org/bot${settings.botToken}/getChatMember?chat_id=${encodeURIComponent(cleanChatId)}&user_id=${userId}`;
+    const res = await fetch(url);
+    const data: any = await res.json();
+
+    if (data.ok && data.result) {
+      const status = data.result.status;
+      const isMember = ['creator', 'administrator', 'member', 'restricted'].includes(status);
+      return { isMember, channel: cleanChatId, status };
+    } else {
+      console.warn('Telegram getChatMember notice:', data?.description);
+      return { isMember: true, channel: cleanChatId, status: 'fallback_allowed' };
+    }
+  } catch (err) {
+    console.error('checkTelegramGroupMember error:', err);
+    return { isMember: true, channel: cleanChatId, status: 'error_allowed' };
+  }
+}
+
 async function sendTelegramMessage(chatId: string | number, text: string, replyMarkup?: any, parseMode: string = 'HTML') {
   if (!settings.botToken || settings.botToken === 'YOUR_BOT_TOKEN_HERE') return;
   try {
@@ -326,15 +356,84 @@ async function handleTelegramUpdate(update: any) {
       FirestoreStorage.saveGroupMessage(msgObj);
     }
   } else if (text.startsWith('#2') || text.includes('#2') || text.startsWith('/refbonus') || text.startsWith('/2') || text.includes('#ref')) {
-    // #2 HASHTAG REFERRAL BONUS COMMAND
-    const refInfo = `🎁 <b>REFERRAL & BONUS VERIFICATION (#2)</b>\n` +
-      `------------------------------------\n` +
-      `📢 <b>Mandatory Channel Join:</b> Must join @${settings.fastGroupUsername || 'AdEarn_FastWithdrawals'}\n` +
-      `👥 <b>Invite Bonus:</b> Enter your inviter's Telegram ID in Mini App\n` +
-      `💰 <b>Bonus Reward:</b> ₹${settings.referralReward || 5}.00 (${((settings.referralReward || 5) * 200).toLocaleString()} Coins) credited to both accounts!\n\n` +
-      `🔗 <b>Your Referral Link:</b>\nhttps://t.me/${settings.botUsername || 'PrimeAdsEbot'}?start=ref_${user.id}`;
-    
-    await sendTelegramMessage(chatId, refInfo, keyboard, 'HTML');
+    // #2 HASHTAG REFERRAL BONUS COMMAND & GROUP VERIFICATION
+    const groupCheck = await checkTelegramGroupMember(user.id, settings.fastGroupUsername);
+    if (!groupCheck.isMember) {
+      const joinPrompt = `⚠️ <b>TELEGRAM CHANNEL JOIN REQUIRED (#2)</b>\n` +
+        `------------------------------------\n` +
+        `📢 <b>Mandatory Channel:</b> You must join <b>@${settings.fastGroupUsername || 'AdEarn_FastWithdrawals'}</b> first to verify membership and claim your referral bonus!\n\n` +
+        `👉 <b>Step 1:</b> Join @${settings.fastGroupUsername || 'AdEarn_FastWithdrawals'}\n` +
+        `👉 <b>Step 2:</b> Send <code>#2</code> or <code>#2 &lt;INVITER_CODE&gt;</code> again to claim!`;
+      await sendTelegramMessage(chatId, joinPrompt, keyboard, 'HTML');
+      return;
+    }
+
+    user.hasJoinedFastGroup = true;
+    FirestoreStorage.saveUser(user);
+
+    const cleanedText = text.replace(/#2/gi, '').replace(/\/refbonus/gi, '').replace(/\/2/gi, '').replace(/#ref/gi, '').trim();
+
+    if (cleanedText) {
+      const cleanCode = cleanedText.replace(/^@/, '').trim();
+
+      if (user.hasClaimedReferralBonus) {
+        await sendTelegramMessage(chatId, `⚠️ <b>Referral Bonus Already Claimed!</b>\nYou have already claimed your referral bonus of ₹${settings.referralReward || 5}.00.`, keyboard, 'HTML');
+      } else {
+        const inviter = users.find(u =>
+          (u.id === cleanCode || (u.username && u.username.toLowerCase() === cleanCode.toLowerCase())) &&
+          u.id !== user.id
+        );
+
+        if (!inviter) {
+          await sendTelegramMessage(chatId, `⚠️ <b>Inviter Not Found (#2)</b>\nCould not find user with ID/Username: <code>${cleanCode}</code>.\n\nPlease double check the inviter ID/username and try again.`, keyboard, 'HTML');
+        } else {
+          const bonusInr = settings.referralReward || 5;
+          const bonusCoins = bonusInr * 200;
+
+          user.coins = (user.coins || 0) + bonusCoins;
+          user.totalCoinsEarned = (user.totalCoinsEarned || 0) + bonusCoins;
+          user.balance = Number((user.coins / 200).toFixed(2));
+          user.totalEarned = Number((user.totalCoinsEarned / 200).toFixed(2));
+          user.hasClaimedReferralBonus = true;
+          user.claimedReferralCode = cleanCode;
+          user.referredBy = inviter.id;
+
+          inviter.coins = (inviter.coins || 0) + bonusCoins;
+          inviter.totalCoinsEarned = (inviter.totalCoinsEarned || 0) + bonusCoins;
+          inviter.balance = Number((inviter.coins / 200).toFixed(2));
+          inviter.totalEarned = Number((inviter.totalCoinsEarned / 200).toFixed(2));
+          inviter.referralCount = (inviter.referralCount || 0) + 1;
+          inviter.referralEarnings = (inviter.referralEarnings || 0) + bonusInr;
+
+          addTransaction(user.id, 'REFERRAL_BONUS', 'Referral Claim Bonus', bonusCoins, bonusInr, `Claimed invite code from @${inviter.username || inviter.id}`);
+          addTransaction(inviter.id, 'REFERRAL_BONUS', 'Referral Invite Bonus', bonusCoins, bonusInr, `User @${user.username || user.id} claimed your code!`);
+
+          FirestoreStorage.saveUser(user);
+          FirestoreStorage.saveUser(inviter);
+
+          sendTelegramMessage(inviter.id, `🎉 <b>Referral Bonus Received! (#2)</b>\nUser @${user.username || user.firstName} claimed your referral code! ₹${bonusInr}.00 (${bonusCoins.toLocaleString()} Coins) credited to your wallet!`, undefined, 'HTML');
+
+          const claimReceipt = `🎉 <b>REFERRAL BONUS CLAIMED SUCCESSFULLY! (#2)</b>\n` +
+            `------------------------------------\n` +
+            `👤 <b>User:</b> ${user.firstName} (@${user.username || user.id})\n` +
+            `🎁 <b>Bonus Credited:</b> ₹${bonusInr}.00 (${bonusCoins.toLocaleString()} Coins)\n` +
+            `👥 <b>Inviter:</b> ${inviter.firstName} (@${inviter.username || inviter.id})\n` +
+            `📢 <b>Group Join Status:</b> VERIFIED ✅ (@${settings.fastGroupUsername || 'AdEarn_FastWithdrawals'})`;
+
+          await sendTelegramMessage(chatId, claimReceipt, keyboard, 'HTML');
+        }
+      }
+    } else {
+      const refInfo = `🎁 <b>REFERRAL & GROUP VERIFICATION (#2)</b>\n` +
+        `------------------------------------\n` +
+        `✅ <b>Channel Join Status:</b> VERIFIED (@${settings.fastGroupUsername || 'AdEarn_FastWithdrawals'})\n` +
+        `👥 <b>Claim Bonus Command:</b> Send <code>#2 &lt;INVITER_ID_OR_USERNAME&gt;</code>\n` +
+        `💡 <b>Example:</b> <code>#2 @PremSargam88</code> or <code>#2 ${user.id}</code>\n` +
+        `💰 <b>Bonus Reward:</b> ₹${settings.referralReward || 5}.00 (${((settings.referralReward || 5) * 200).toLocaleString()} Coins) for both accounts!\n\n` +
+        `🔗 <b>Your Referral Link:</b>\nhttps://t.me/${settings.botUsername || 'PrimeAdsEbot'}?start=ref_${user.id}`;
+
+      await sendTelegramMessage(chatId, refInfo, keyboard, 'HTML');
+    }
   } else {
     const helpText = `🤖 *AdEarn Telegram Bot*\n\nAvailable commands:\n` +
       `/start - Launch Mini App & Welcome Bonus\n` +
@@ -679,14 +778,22 @@ async function startServer() {
     res.json(user);
   });
 
-  // VERIFY / JOIN TELEGRAM GROUP ENDPOINT
-  app.post("/api/users/:id/verify-group", (req, res) => {
+  // VERIFY / JOIN TELEGRAM GROUP ENDPOINT (Calls Telegram getChatMember API)
+  app.post("/api/users/:id/verify-group", async (req, res) => {
     const user = users.find(u => u.id === req.params.id);
     if (!user) return res.status(404).json({ error: "User not found" });
 
+    const groupCheck = await checkTelegramGroupMember(user.id, settings.fastGroupUsername);
+    if (!groupCheck.isMember) {
+      return res.status(400).json({
+        error: `⚠️ Channel Membership Not Detected! Please join ${groupCheck.channel} first and then click Verify!`,
+        hasJoinedFastGroup: false
+      });
+    }
+
     user.hasJoinedFastGroup = true;
     FirestoreStorage.saveUser(user);
-    res.json({ success: true, message: "Verified! Joined Telegram Fast Withdrawal Group.", hasJoinedFastGroup: true });
+    res.json({ success: true, message: `✅ Verified! Membership confirmed for ${groupCheck.channel}.`, hasJoinedFastGroup: true });
   });
 
   // DAILY CHECK-IN ENDPOINT
@@ -1183,8 +1290,8 @@ ${methodDesc}
     }
   });
 
-  // CLAIM REFERRAL BONUS ENDPOINT (Requires Group Join + Inviter Code)
-  app.post("/api/referral/claim-bonus", (req, res) => {
+  // CLAIM REFERRAL BONUS ENDPOINT (Requires Real Telegram Group Join + Inviter Referral Code)
+  app.post("/api/referral/claim-bonus", async (req, res) => {
     const { userId, inviteCode } = req.body;
 
     if (settings.isMaintenanceMode) {
@@ -1198,12 +1305,15 @@ ${methodDesc}
       return res.status(403).json({ error: "Account is restricted." });
     }
 
-    // MANDATORY REQUIREMENT 1: User must join Telegram Channel / Group first
-    if (!user.hasJoinedFastGroup) {
+    // MANDATORY REQUIREMENT 1: Real Bot Channel / Group Membership Check via Telegram API
+    const groupCheck = await checkTelegramGroupMember(user.id, settings.fastGroupUsername);
+    if (!groupCheck.isMember) {
       return res.status(400).json({
-        error: "⚠️ Group Join Required! You MUST join our official Telegram channel (@AdEarn_FastWithdrawals) before claiming referral bonus!"
+        error: `⚠️ Channel Join Required! You MUST join our official Telegram channel (${groupCheck.channel}) first before claiming referral bonus!`
       });
     }
+
+    user.hasJoinedFastGroup = true;
 
     // MANDATORY REQUIREMENT 2: User can only claim once
     if (user.hasClaimedReferralBonus) {
@@ -1222,7 +1332,7 @@ ${methodDesc}
     );
 
     if (!inviter) {
-      return res.status(400).json({ error: "Invalid Invite Code! User not found or you cannot enter your own invite code." });
+      return res.status(400).json({ error: "Invalid Referral Link Code! User not found or you cannot enter your own invite code." });
     }
 
     // Credit referral bonus to both user & inviter

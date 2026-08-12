@@ -154,7 +154,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         }
       }
     } else {
-      setPinError('Invalid Security PIN! Please enter PIN 8888 (Admin) or 9999 (CEO).');
+      setPinError('Invalid Security PIN! Please check your access PIN and try again.');
     }
   };
 
