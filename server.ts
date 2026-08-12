@@ -169,7 +169,7 @@ async function handleTelegramUpdate(update: any) {
         timestamp: new Date().toISOString()
       });
       FirestoreStorage.saveUser(refUser);
-      sendTelegramMessage(refUser.id, `🎉 *New Referral Joined!*\nUser @${user.username} (${user.firstName}) just joined via your link! You will earn ₹${settings.referralReward || 5} bonus + 10% commission when they watch ads.`);
+      sendTelegramMessage(refUser.id, `🎉 <b>New Referral Joined!</b>\nUser @${user.username} (${user.firstName}) just joined via your link! You will earn ₹${settings.referralReward || 5} bonus + 10% commission when they watch ads.`);
     }
   } else {
     if (settings.ownerTelegramId && telegramId === settings.ownerTelegramId) {
@@ -186,25 +186,25 @@ async function handleTelegramUpdate(update: any) {
     inline_keyboard: [
       [
         {
-          text: "🚀 Open AdEarn Mini App",
+          text: "💎 🚀 Open AdEarn Mini App",
           web_app: { url: appUrl }
         }
       ],
       [
-        { text: "📺 Watch Ads (+10 Coins)", web_app: { url: appUrl } },
-        { text: "🎁 Daily Check-in (+50 Coins)", web_app: { url: appUrl } }
+        { text: "🟢 📺 Watch Ads (+10 Coins)", web_app: { url: appUrl } },
+        { text: "🟡 🎁 Daily Check-in (+50 Coins)", web_app: { url: appUrl } }
       ],
       [
-        { text: "💸 Withdraw (UPI / Bank)", web_app: { url: appUrl } },
-        { text: "👥 Refer & Earn (10%)", web_app: { url: appUrl } }
+        { text: "🔴 💸 Withdraw (UPI / Bank)", web_app: { url: appUrl } },
+        { text: "🟣 👥 Refer & Earn (10%)", web_app: { url: appUrl } }
       ],
       [
-        { text: "📊 My Balance & History", web_app: { url: appUrl } },
-        { text: "🎧 Support & CEO Contact", url: "https://t.me/PremSargam88" }
+        { text: "🔵 📊 My Balance & History", web_app: { url: appUrl } },
+        { text: "👑 🎧 Support & CEO Contact", url: "https://t.me/PremSargam88" }
       ],
       [
         { 
-          text: "💬 Join VIP Channel", 
+          text: "🟢 💬 Join VIP Channel", 
           url: settings.fastGroupUsername ? (settings.fastGroupUsername.startsWith('http') ? settings.fastGroupUsername : `https://t.me/${settings.fastGroupUsername.replace(/^@/, '')}`) : 'https://t.me/AdEarn_FastWithdrawals' 
         }
       ]
@@ -212,46 +212,45 @@ async function handleTelegramUpdate(update: any) {
   };
 
   if (text.startsWith('/start')) {
-    const welcomeText = `👋 *Welcome to @${settings.botUsername || 'PrimeAdsEbot'}!*\n\n` +
-      `✨ *Welcome Bonus:* ₹${settings.welcomeBonus || 5}.00 (${((settings.welcomeBonus || 5) * 200).toLocaleString()} Coins) credited to your balance!\n\n` +
-      `💰 *Conversion Rate:* 10,000 Coins = ₹50 (10 Coins per Ad)\n` +
-      `📺 *Watch Unlimited Ads:* Earn 10 Coins (₹0.05) per ad watch.\n` +
-      `🎁 *Daily Check-in:* Earn 50 Coins (₹0.25) every 24 hours!\n` +
-      `👥 *Referral Program:* Earn ₹5 (${(5 * 200).toLocaleString()} Coins) after 50 ads + 10% lifetime commission!\n` +
-      `💳 *Withdrawal:* Min ₹50 (10,000 Coins) via Instant UPI / Bank (Requires ${settings.minAdsWatchForWithdrawal || 100} ads watched).\n\n` +
+    const welcomeText = `✨ <b>Welcome Bonus:</b> ₹${settings.welcomeBonus || 5}.00 (${((settings.welcomeBonus || 5) * 200).toLocaleString()} Coins) credited to your balance!\n\n` +
+      `💰 <b>Conversion Rate:</b> 10,000 Coins = ₹50 (10 Coins per Ad)\n` +
+      `📺 <b>Watch Unlimited Ads:</b> Earn 10 Coins (₹0.05) per ad watch.\n` +
+      `🎁 <b>Daily Check-in:</b> Earn 50 Coins (₹0.25) every 24 hours!\n` +
+      `👥 <b>Referral Program:</b> Earn ₹5 (${(5 * 200).toLocaleString()} Coins) after 50 ads + 10% lifetime commission!\n` +
+      `💳 <b>Withdrawal:</b> Min ₹50 (10,000 Coins) via Instant UPI / Bank (Requires ${settings.minAdsWatchForWithdrawal || 100} ads watched).\n\n` +
       `Tap below to launch the Mini App and start earning!`;
     await sendTelegramMessage(chatId, welcomeText, keyboard);
   } else if (text === '/balance' || text === '/dashboard') {
-    const dashText = `📊 *AdEarn User Balance*\n\n` +
-      `👤 *User:* ${user.firstName} (@${user.username})\n` +
-      `🪙 *Coin Balance:* ${(user.coins || 0).toLocaleString()} Coins (≈ ₹${(user.balance || 0).toFixed(2)})\n` +
-      `💵 *Total Earned:* ${(user.totalCoinsEarned || 0).toLocaleString()} Coins (≈ ₹${(user.totalEarned || 0).toFixed(2)})\n` +
-      `💸 *Total Withdrawn:* ₹${(user.totalWithdrawn || 0).toFixed(2)}\n` +
-      `📺 *Ads Watched:* ${user.totalAdsWatched || 0} / ${settings.minAdsWatchForWithdrawal || 100} Minimum Required`;
+    const dashText = `📊 <b>AdEarn User Balance</b>\n\n` +
+      `👤 <b>User:</b> ${user.firstName} (@${user.username})\n` +
+      `🪙 <b>Coin Balance:</b> ${(user.coins || 0).toLocaleString()} Coins (≈ ₹${(user.balance || 0).toFixed(2)})\n` +
+      `💵 <b>Total Earned:</b> ${(user.totalCoinsEarned || 0).toLocaleString()} Coins (≈ ₹${(user.totalEarned || 0).toFixed(2)})\n` +
+      `💸 <b>Total Withdrawn:</b> ₹${(user.totalWithdrawn || 0).toFixed(2)}\n` +
+      `📺 <b>Ads Watched:</b> ${user.totalAdsWatched || 0} / ${settings.minAdsWatchForWithdrawal || 100} Minimum Required`;
     await sendTelegramMessage(chatId, dashText, keyboard);
   } else if (text === '/withdraw') {
     const minReq = settings.minAdsWatchForWithdrawal || 100;
     const adsLeft = Math.max(0, minReq - (user.totalAdsWatched || 0));
     const isUnlocked = adsLeft === 0;
-    const withdrawText = `💳 *Withdrawal Center*\n\n` +
-      `🪙 *Available Balance:* ${(user.coins || 0).toLocaleString()} Coins (≈ ₹${(user.balance || 0).toFixed(2)})\n` +
-      `🎯 *Minimum Payout:* 10,000 Coins (₹50)\n` +
-      `📊 *Ads Progress:* ${user.totalAdsWatched || 0} / ${minReq} Watched\n\n` +
+    const withdrawText = `💳 <b>Withdrawal Center</b>\n\n` +
+      `🪙 <b>Available Balance:</b> ${(user.coins || 0).toLocaleString()} Coins (≈ ₹${(user.balance || 0).toFixed(2)})\n` +
+      `🎯 <b>Minimum Payout:</b> 10,000 Coins (₹50)\n` +
+      `📊 <b>Ads Progress:</b> ${user.totalAdsWatched || 0} / ${minReq} Watched\n\n` +
       (isUnlocked 
-        ? `✅ *Status:* UNLOCKED! Open the Mini App to request instant UPI payout.`
-        : `⚠️ *Status:* LOCKED. Watch ${adsLeft} more ads to unlock payout.`);
+        ? `✅ <b>Status:</b> UNLOCKED! Open the Mini App to request instant UPI payout.`
+        : `⚠️ <b>Status:</b> LOCKED. Watch ${adsLeft} more ads to unlock payout.`);
     await sendTelegramMessage(chatId, withdrawText, keyboard);
   } else if (text === '/refer') {
-    const refText = `👥 *AdEarn Referral Program*\n\n` +
+    const refText = `👥 <b>AdEarn Referral Program</b>\n\n` +
       `Earn ₹5 bonus when your friend watches 50 ads + get 10% lifetime commission on all their ad views!\n\n` +
-      `🔗 *Your Referral Link:*\nhttps://t.me/${settings.botUsername || 'PrimeAdsEbot'}?start=ref_${user.id}`;
+      `🔗 <b>Your Referral Link:</b>\nhttps://t.me/${settings.botUsername || 'PrimeAdsEbot'}?start=ref_${user.id}`;
     await sendTelegramMessage(chatId, refText, keyboard);
   } else if (text === '/checkin') {
     const now = Date.now();
     const cooldown = 24 * 3600 * 1000;
     if (user.lastCheckInAt && (now - user.lastCheckInAt) < cooldown) {
       const hoursLeft = Math.ceil((cooldown - (now - user.lastCheckInAt)) / (3600 * 1000));
-      await sendTelegramMessage(chatId, `⏳ *Daily Check-In Claimed!*\nYou already claimed your daily 50 Coins today. Please try again in ${hoursLeft} hours.`, keyboard);
+      await sendTelegramMessage(chatId, `⏳ <b>Daily Check-In Claimed!</b>\nYou already claimed your daily 50 Coins today. Please try again in ${hoursLeft} hours.`, keyboard);
     } else {
       user.coins = (user.coins || 0) + 50;
       user.totalCoinsEarned = (user.totalCoinsEarned || 0) + 50;
@@ -260,13 +259,13 @@ async function handleTelegramUpdate(update: any) {
       user.lastCheckInAt = now;
       addTransaction(user.id, 'DAILY_CHECKIN', 'Daily 24H Bonus Claim', 50, 0.25, 'Claimed via Telegram Bot');
       FirestoreStorage.saveUser(user);
-      await sendTelegramMessage(chatId, `🎁 *Daily Bonus Claimed!*\n+50 Coins (₹0.25) credited to your balance! New Balance: ${(user.coins || 0).toLocaleString()} Coins.`, keyboard);
+      await sendTelegramMessage(chatId, `🎁 <b>Daily Bonus Claimed!</b>\n+50 Coins (₹0.25) credited to your balance! New Balance: ${(user.coins || 0).toLocaleString()} Coins.`, keyboard);
     }
   } else if (text === '/support') {
-    const suppText = `🎧 *AdEarn Customer Support*\n\nNeed help with withdrawals, ads, or referrals?\n\n` +
-      `👑 *CEO Direct Contact:* @PremSargam88\n` +
-      `💬 *Official Telegram Channel:* @${settings.fastGroupUsername || 'AdEarn_FastWithdrawals'}\n` +
-      `⚡ *Support Availability:* 24/7 Fast Response`;
+    const suppText = `🎧 <b>AdEarn Customer Support</b>\n\nNeed help with withdrawals, ads, or referrals?\n\n` +
+      `👑 <b>CEO Direct Contact:</b> @PremSargam88\n` +
+      `💬 <b>Official Telegram Channel:</b> @${settings.fastGroupUsername || 'AdEarn_FastWithdrawals'}\n` +
+      `⚡ <b>Support Availability:</b> 24/7 Fast Response`;
     await sendTelegramMessage(chatId, suppText, keyboard);
   } else if (text.startsWith('#1') || text.includes('#1') || text.startsWith('/pass') || text.startsWith('/1')) {
     // #1 HASHTAG FAST WITHDRAWAL PASS COMMAND FOR TELEGRAM APPROVAL GROUP
@@ -440,12 +439,18 @@ async function startServer() {
         sendTelegramMessage(u.id, modeText);
       });
     } else {
-      // General settings update message
+      // General settings update message auto broadcast to Telegram group
       const sysMsg: GroupMessage = {
         id: `msg_${Date.now()}`,
-        sender: "System Bot",
+        sender: "CEO System Engine",
         senderRole: "SYSTEM",
-        text: `⚙️ **SYSTEM SETTINGS UPDATED BY CEO**\n• Welcome Bonus: ₹${settings.welcomeBonus}\n• Per Ad Reward: ₹${settings.perAdReward}\n• Referral Reward: ₹${settings.referralReward}\n• Min Withdrawal: ₹${settings.minWithdrawal}\n• Min Ads Watch Required: ${settings.minAdsWatchForWithdrawal}\n• Commission: ${settings.referralCommissionPct}%`,
+        text: `⚙️ **AUTO BROADCAST: SYSTEM UPDATE BY CEO ADMIN**
+📢 **Welcome Bonus:** ₹${settings.welcomeBonus} (${((settings.welcomeBonus || 5) * 200).toLocaleString()} Coins)
+🪙 **Per Ad Reward:** ₹${settings.perAdReward || 0.05} (10 Coins)
+👥 **Referral Bonus:** ₹${settings.referralReward || 5} + ${settings.referralCommissionPct || 10}% Commission
+💳 **Min Withdrawal:** ₹${settings.minWithdrawal || 50} (10,000 Coins)
+🔒 **Min Ads Required:** ${settings.minAdsWatchForWithdrawal || 100} Lifetime Ads
+✨ Launch Mini App now to claim your earnings!`,
         timestamp: new Date().toISOString(),
         isSystemNotification: true
       };
@@ -526,6 +531,56 @@ async function startServer() {
       newCoins: user.coins,
       newBalance: user.balance,
       lastCheckInAt: user.lastCheckInAt
+    });
+  });
+
+  // LUCKY SPIN WHEEL ENDPOINT
+  app.post("/api/users/:id/spin", (req, res) => {
+    if (settings.isMaintenanceMode) {
+      return res.status(403).json({ error: settings.maintenanceMessage || "🛠️ System is under maintenance. All earning tasks are locked temporarily." });
+    }
+
+    const user = users.find(u => u.id === req.params.id);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    if (user.isBanned) {
+      return res.status(403).json({ error: "Account is restricted" });
+    }
+
+    const { prizeCoins } = req.body || {};
+    const coinsEarned = prizeCoins && typeof prizeCoins === 'number' && prizeCoins > 0 ? prizeCoins : 25;
+    const rewardInr = Number((coinsEarned / 200).toFixed(2));
+
+    const now = Date.now();
+    (user as any).lastSpinAt = now;
+
+    user.coins = (user.coins || 0) + coinsEarned;
+    user.totalCoinsEarned = (user.totalCoinsEarned || 0) + coinsEarned;
+    user.balance = Number((user.coins / 200).toFixed(2));
+    user.totalEarned = Number((user.totalCoinsEarned / 200).toFixed(2));
+
+    addTransaction(user.id, 'GIFT_CLAIM', 'Lucky Wheel Prize', coinsEarned, rewardInr, 'Won prize on Lucky Spin Wheel');
+
+    if (!user.notifications) user.notifications = [];
+    user.notifications.unshift({
+      id: `notif_${Date.now()}`,
+      type: 'DAILY_CHECKIN',
+      title: '🎰 Lucky Wheel Winner!',
+      message: `You won ${coinsEarned} Coins (₹${rewardInr}) on the Lucky Spin Wheel!`,
+      amount: rewardInr,
+      read: false,
+      timestamp: new Date().toISOString()
+    });
+
+    FirestoreStorage.saveUser(user);
+
+    res.json({
+      success: true,
+      coinsEarned,
+      rewardInr,
+      newCoins: user.coins,
+      newBalance: user.balance,
+      lastSpinAt: (user as any).lastSpinAt
     });
   });
 
@@ -989,18 +1044,19 @@ Answer user questions accurately, politely, and concisely based on these policie
 
     // INSTANT NOTIFICATION TO FAST APPROVAL PRIVATE GROUP
     const methodDesc = method === 'UPI'
-      ? `💳 **UPI:** \`${upiId}\``
+      ? `💳 **UPI VPA:** \`${upiId}\``
       : `🏦 **BANK:** \`${bankDetails?.accountNumber}\` | IFSC: \`${bankDetails?.ifscCode}\` | Holder: \`${bankDetails?.accountHolder}\``;
 
     const groupAlert: GroupMessage = {
       id: `msg_${Date.now()}`,
       sender: "Withdrawal Engine Bot",
       senderRole: "SYSTEM",
-      text: `🚨 **NEW WITHDRAWAL REQUEST** \`#${reqId}\`
+      text: `🚨 **AUTO BROADCAST: NEW WITHDRAWAL REQUEST** \`#${reqId}\`
 👤 **User:** ${user.firstName} (${newRequest.userTelegram})
-💰 **Amount:** ₹${amount.toFixed(2)}
+💰 **Amount:** ₹${amount.toFixed(2)} (${(amount * 200).toLocaleString()} Coins)
 ${methodDesc}
 🕒 **Time:** Just now
+⏳ **Status:** PENDING APPROVAL
 
 ⚡ **Fast Approval Command:** \`${settings.fastApprovalHashtag} ${reqId} PASS\``,
       timestamp: new Date().toISOString(),
@@ -1055,18 +1111,20 @@ ${methodDesc}
         });
 
         FirestoreStorage.saveUser(user);
-        sendTelegramMessage(user.id, `⚡ *Withdrawal Approved & Paid!*\nYour payout request #${reqId} of ₹${request.amount.toFixed(2)} has been paid via ${request.method}!`);
+        sendTelegramMessage(user.id, `💚 <b>SUCCESSFUL WITHDRAWAL APPROVED & PAID!</b>\nYour payout request #${reqId} of ₹${request.amount.toFixed(2)} has been transferred via ${request.method}! 🎉`);
       }
 
-      // Send group confirmation
+      // Send group confirmation & auto-broadcast successful payout
       const passMsg: GroupMessage = {
         id: `msg_${Date.now()}`,
-        sender: processedBy || "Withdrawal Pass Admin",
+        sender: processedBy || "Withdrawal Engine",
         senderRole: "ADMIN",
-        text: `✅ **WITHDRAWAL APPROVED!** \`#${reqId}\`
-👤 User: ${request.userName}
-💰 Amount: ₹${request.amount.toFixed(2)}
-⚡ Executed by: ${processedBy || 'Pass Admin'} using fast command \`${settings.fastApprovalHashtag} ${reqId} PASS\``,
+        text: `💚 **AUTO BROADCAST: SUCCESSFUL WITHDRAWAL PAID!** \`#${reqId}\` 💚
+🎉 **User:** ${request.userName} (${request.userTelegram})
+💰 **Amount Paid:** ₹${request.amount.toFixed(2)} (${(request.amount * 200).toLocaleString()} Coins)
+💳 **Payout Method:** ${request.method}
+⚡ **Status:** SUCCESSFUL & CREDITED TO ACCOUNT!
+✨ Executed by: ${processedBy || 'Fast Approval Bot'} using \`${settings.fastApprovalHashtag} ${reqId} PASS\``,
         timestamp: new Date().toISOString(),
         isSystemNotification: false,
         withdrawalRequestId: reqId

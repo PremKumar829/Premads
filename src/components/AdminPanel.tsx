@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, SystemSettings, WithdrawalRequest, AdminMember, UserRole, SupportTicket } from '../types';
 import { api } from '../services/api';
-import { Shield, Settings, Wallet, Users, Key, Save, CheckCircle2, AlertCircle, Zap, Ban, RefreshCw, Plus, Trash2, Search, Copy, Check, Lock, Unlock, Smartphone, TrendingUp, DollarSign, Eye, ArrowUpRight, RotateCcw, Headset, MessageSquare, Clock, Send } from 'lucide-react';
+import { Shield, Settings, Wallet, Users, Key, Save, CheckCircle2, AlertCircle, Zap, Ban, RefreshCw, Plus, Trash2, Search, Copy, Check, Lock, Unlock, Smartphone, TrendingUp, DollarSign, Eye, ArrowUpRight, RotateCcw, Headset, MessageSquare, Clock, Send, Download, FileSpreadsheet } from 'lucide-react';
 
 interface AdminPanelProps {
   currentUser: User;
@@ -222,6 +222,72 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
     return matchesFilter && matchesSearch;
   });
+
+  const handleExportWithdrawalsCSV = () => {
+    const listToExport = filteredWithdrawals.length > 0 ? filteredWithdrawals : withdrawals;
+    if (listToExport.length === 0) {
+      alert('No withdrawal requests available to export.');
+      return;
+    }
+
+    const escapeCSV = (val: any) => {
+      if (val === null || val === undefined) return '""';
+      const str = String(val).replace(/"/g, '""');
+      return `"${str}"`;
+    };
+
+    const headers = [
+      'Request ID',
+      'User Name',
+      'Telegram Handle',
+      'User ID',
+      'Amount (INR)',
+      'Payment Method',
+      'UPI ID',
+      'Bank Name',
+      'Account Number',
+      'IFSC Code',
+      'Account Holder',
+      'Status',
+      'Requested At',
+      'Processed At',
+      'Processed By',
+      'Rejection Reason'
+    ];
+
+    const rows = listToExport.map(req => [
+      escapeCSV(req.id),
+      escapeCSV(req.userName),
+      escapeCSV(req.userTelegram),
+      escapeCSV(req.userId || ''),
+      escapeCSV(req.amount),
+      escapeCSV(req.method),
+      escapeCSV(req.upiId || ''),
+      escapeCSV(req.bankDetails?.bankName || ''),
+      escapeCSV(req.bankDetails?.accountNumber || ''),
+      escapeCSV(req.bankDetails?.ifscCode || ''),
+      escapeCSV(req.bankDetails?.accountHolder || ''),
+      escapeCSV(req.status),
+      escapeCSV(req.requestedAt ? new Date(req.requestedAt).toLocaleString() : ''),
+      escapeCSV(req.processedAt ? new Date(req.processedAt).toLocaleString() : ''),
+      escapeCSV(req.processedBy || ''),
+      escapeCSV(req.rejectionReason || '')
+    ]);
+
+    const csvContent = [headers.map(escapeCSV).join(','), ...rows.map(r => r.join(','))].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    const filterTag = withdrawalFilter !== 'ALL' ? `_${withdrawalFilter}` : '';
+    const dateStr = new Date().toISOString().split('T')[0];
+    link.setAttribute('download', `Withdrawals_Export${filterTag}_${dateStr}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
 
   const filteredUsers = users.filter(u =>
     !userSearch ||
@@ -776,8 +842,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       {/* TAB 2: WITHDRAWAL QUEUE */}
       {activeTab === 'WITHDRAWALS' && (
         <div className="space-y-3">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-3 flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-1.5">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-3 flex flex-wrap items-center justify-between gap-2.5">
+            <div className="flex items-center gap-1.5 flex-wrap">
               {(['ALL', 'PENDING', 'APPROVED', 'REJECTED'] as const).map((st) => (
                 <button
                   key={st}
@@ -793,15 +859,27 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               ))}
             </div>
 
-            <div className="relative flex-1 max-w-xs">
-              <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-500" />
-              <input
-                type="text"
-                value={withdrawalSearch}
-                onChange={(e) => setWithdrawalSearch(e.target.value)}
-                placeholder="Search ID, UPI, Bank..."
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white focus:outline-none"
-              />
+            <div className="flex items-center gap-2 flex-wrap flex-1 justify-end min-w-[240px]">
+              <div className="relative flex-1 max-w-xs min-w-[150px]">
+                <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-500" />
+                <input
+                  type="text"
+                  value={withdrawalSearch}
+                  onChange={(e) => setWithdrawalSearch(e.target.value)}
+                  placeholder="Search ID, UPI, Bank..."
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white focus:outline-none"
+                />
+              </div>
+
+              <button
+                type="button"
+                onClick={handleExportWithdrawalsCSV}
+                className="bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold px-3.5 py-1.5 rounded-xl text-xs flex items-center gap-1.5 shadow transition-all active:scale-95 cursor-pointer shrink-0"
+                title="Download current withdrawal request list as CSV file"
+              >
+                <Download className="w-3.5 h-3.5 text-emerald-100" />
+                <span>Export CSV</span>
+              </button>
             </div>
           </div>
 

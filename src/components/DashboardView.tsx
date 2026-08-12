@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { User, SystemSettings, WithdrawalRequest } from '../types';
 import { TransactionHistoryModal } from './TransactionHistoryModal';
-import { Wallet, Tv, UserPlus, Gift, ArrowUpRight, TrendingUp, Sparkles, CheckCircle, Clock, History, Users, Coins, Trophy, Award, Target, Flame } from 'lucide-react';
+import { SpinWheel } from './SpinWheel';
+import { LiveWithdrawalTicker } from './LiveWithdrawalTicker';
+import { Wallet, Tv, UserPlus, Gift, ArrowUpRight, TrendingUp, Sparkles, CheckCircle, Clock, History, Users, Coins, Trophy, Award, Target, Flame, Zap } from 'lucide-react';
 import { api } from '../services/api';
 
 interface LeaderboardUser {
@@ -22,6 +24,7 @@ interface DashboardViewProps {
   onNavigate: (tab: 'home' | 'watch' | 'refer' | 'withdraw' | 'admin') => void;
   onClaimDailyStreak: () => void;
   dailyClaimed: boolean;
+  onRefreshUserData?: () => void;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
@@ -30,10 +33,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   withdrawals,
   onNavigate,
   onClaimDailyStreak,
-  dailyClaimed
+  dailyClaimed,
+  onRefreshUserData
 }) => {
   const [streakClaiming, setStreakClaiming] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [showSpinModal, setShowSpinModal] = useState(false);
   const [leaderboard, setLeaderboard] = useState<LeaderboardUser[]>([]);
   const [loadingLeaderboard, setLoadingLeaderboard] = useState(false);
 
@@ -298,6 +303,30 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
       </div>
 
+      {/* Lucky Spin Wheel Booster Widget */}
+      <div className="bg-gradient-to-r from-amber-950/80 via-slate-900 to-yellow-950/80 border border-amber-500/40 rounded-2xl p-4 flex items-center justify-between shadow-lg">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 font-extrabold text-lg shadow-sm">
+            🎰
+          </div>
+          <div>
+            <div className="text-xs font-bold text-white flex items-center gap-1.5">
+              <span>Lucky Spin Wheel</span>
+              <span className="bg-amber-500 text-slate-950 text-[9px] font-black px-1.5 py-0.2 rounded">Free Spins</span>
+            </div>
+            <div className="text-[11px] text-slate-300">Spin wheel & win up to 500 Coins (₹2.50)</div>
+          </div>
+        </div>
+
+        <button
+          onClick={() => setShowSpinModal(true)}
+          className="bg-gradient-to-r from-amber-400 to-yellow-500 hover:from-amber-300 hover:to-yellow-400 text-slate-950 font-black px-3.5 py-2 rounded-xl text-xs flex items-center gap-1.5 shadow-md active:scale-95 transition-all cursor-pointer"
+        >
+          <Sparkles className="w-4 h-4 fill-slate-950" />
+          <span>Spin Now</span>
+        </button>
+      </div>
+
       {/* Daily Check-in Bonus Widget */}
       <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -553,6 +582,19 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           onClose={() => setShowHistoryModal(false)}
         />
       )}
+
+      {showSpinModal && (
+        <SpinWheel
+          user={user}
+          onSpinCompleted={async (prizeCoins, label) => {
+            await api.spinWheel(user.id, prizeCoins);
+            if (onRefreshUserData) onRefreshUserData();
+          }}
+          onClose={() => setShowSpinModal(false)}
+        />
+      )}
+
+      <LiveWithdrawalTicker withdrawals={withdrawals} />
     </div>
   );
 };

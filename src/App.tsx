@@ -67,34 +67,34 @@ export default function App() {
 
     autoDetectTgUser();
 
-    const fetchData = async () => {
-      try {
-        const s = await api.getSettings();
-        setSettings(s);
-
-        const u = await api.getAllUsers();
-        if (u && u.length > 0) {
-          setUsers(u);
-          setCurrentUser(prev => u.find((item) => item.id === prev.id) || prev);
-        }
-
-        const w = await api.getWithdrawals();
-        if (w) setWithdrawals(w);
-
-        const a = await api.getAdminTeam();
-        if (a) setAdminTeam(a);
-
-        const g = await api.getGroupMessages();
-        if (g) setGroupMessages(g);
-      } catch (err) {
-        console.warn('Backend API sync notice, using active fallback state:', err);
-      }
-    };
-
-    fetchData();
-    const interval = setInterval(fetchData, 4000);
+    refreshAllData();
+    const interval = setInterval(refreshAllData, 4000);
     return () => clearInterval(interval);
   }, []);
+
+  const refreshAllData = async () => {
+    try {
+      const s = await api.getSettings();
+      setSettings(s);
+
+      const u = await api.getAllUsers();
+      if (u && u.length > 0) {
+        setUsers(u);
+        setCurrentUser(prev => u.find((item) => item.id === prev.id) || prev);
+      }
+
+      const w = await api.getWithdrawals();
+      if (w) setWithdrawals(w);
+
+      const a = await api.getAdminTeam();
+      if (a) setAdminTeam(a);
+
+      const g = await api.getGroupMessages();
+      if (g) setGroupMessages(g);
+    } catch (err) {
+      console.warn('Backend API sync notice, using active fallback state:', err);
+    }
+  };
 
   // Update current user reference when user list updates
   useEffect(() => {
@@ -266,14 +266,20 @@ export default function App() {
 
   return (
     <>
-      <MaintenanceModal
-        settings={settings}
-        user={currentUser}
-        onOpenAdminPanel={() => {
-          setActiveAppMode('admin');
-          setActiveTab('admin');
-        }}
-      />
+      {activeAppMode !== 'admin' && (
+        <MaintenanceModal
+          settings={settings}
+          user={currentUser}
+          onOpenAdminPanel={() => {
+            setActiveAppMode('admin');
+            setActiveTab('admin');
+          }}
+          onDisableMaintenance={async () => {
+            await handleUpdateSettings({ isMaintenanceMode: false });
+          }}
+          onElevateUserRole={handleElevateUserRole}
+        />
+      )}
 
       {unreadNotification && (
         <UserNotificationModal
@@ -304,6 +310,7 @@ export default function App() {
                   onNavigate={(t) => setActiveTab(t as any)}
                   onClaimDailyStreak={handleClaimDailyStreak}
                   dailyClaimed={dailyClaimed}
+                  onRefreshUserData={refreshAllData}
                 />
               )}
 

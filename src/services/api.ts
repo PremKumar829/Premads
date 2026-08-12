@@ -94,6 +94,17 @@ export const api = {
     return data;
   },
 
+  spinWheel: async (userId: string, prizeCoins?: number) => {
+    const res = await fetch(`/api/users/${userId}/spin`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prizeCoins })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to spin lucky wheel');
+    return data;
+  },
+
   getUserTransactions: async (userId: string) => {
     const res = await fetch(`/api/users/${userId}/transactions`);
     if (!res.ok) throw new Error('Failed to fetch transactions');

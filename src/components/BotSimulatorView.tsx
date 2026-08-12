@@ -179,9 +179,12 @@ export const BotSimulatorView: React.FC<BotSimulatorViewProps> = ({
             {m.inlineButtons && m.inlineButtons.length > 0 && (
               <div className="mt-2 w-full bg-[#17212b]/95 p-2 rounded-2xl border border-[#2b3b4e] space-y-2 shadow-xl backdrop-blur-md">
                 <div className="text-[10px] font-extrabold uppercase tracking-widest text-cyan-400 px-1 flex items-center justify-between">
-                  <span>⚡ Telegram Premium Colored Keyboard</span>
-                  <span className="text-[9px] bg-gradient-to-r from-cyan-500 to-blue-600 text-white px-2 py-0.5 rounded-full font-bold shadow">
-                    New Update
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                    <span>⚡ Telegram 8.0 Colored Keyboards</span>
+                  </span>
+                  <span className="text-[9px] bg-gradient-to-r from-emerald-500 via-cyan-500 to-blue-600 text-white px-2 py-0.5 rounded-full font-black shadow-lg shadow-cyan-500/30 border border-white/20">
+                    NEW TG COLOR UPDATE
                   </span>
                 </div>
 
@@ -189,7 +192,7 @@ export const BotSimulatorView: React.FC<BotSimulatorViewProps> = ({
                 {m.inlineButtons.find(b => b.action === 'OPEN_MINIAPP') && (
                   <button
                     onClick={() => handleButtonClick('OPEN_MINIAPP')}
-                    className="w-full bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 active:scale-95 text-white font-black py-3 px-4 rounded-xl text-xs shadow-lg shadow-cyan-500/30 border border-cyan-300/50 transition-all flex items-center justify-center gap-2 group"
+                    className="w-full bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 active:scale-95 text-white font-black py-3 px-4 rounded-xl text-xs shadow-xl shadow-cyan-500/40 border-2 border-cyan-300 transition-all flex items-center justify-center gap-2 group cursor-pointer"
                   >
                     <span className="text-sm group-hover:scale-125 transition-transform animate-bounce">💎</span>
                     <span className="tracking-wide">🚀 Open AdEarn Mini App</span>
@@ -197,40 +200,40 @@ export const BotSimulatorView: React.FC<BotSimulatorViewProps> = ({
                   </button>
                 )}
 
-                {/* 2nd Row: Watch Ads (Green) & Withdraw (Red) */}
+                {/* 2nd Row: Watch Ads (Vivid Green) & Withdraw (Vivid Red) */}
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     onClick={() => handleButtonClick('OPEN_WATCH')}
-                    className="bg-gradient-to-r from-emerald-600 via-green-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-95 text-white font-extrabold py-2.5 px-2 rounded-xl text-xs shadow-md shadow-emerald-600/30 border border-emerald-400/40 transition-all flex items-center justify-center gap-1.5 truncate"
+                    className="bg-gradient-to-r from-emerald-500 via-green-600 to-teal-600 hover:from-emerald-400 hover:to-teal-500 active:scale-95 text-white font-black py-3 px-2 rounded-xl text-xs shadow-lg shadow-green-500/40 border-2 border-emerald-300 transition-all flex items-center justify-center gap-1.5 truncate cursor-pointer"
                   >
-                    <span className="animate-spin text-xs">🪙</span>
-                    <span>📺 Watch Ads (+10)</span>
+                    <span className="text-base animate-bounce">🟢</span>
+                    <span>Watch Ads (+10)</span>
                   </button>
 
                   <button
                     onClick={() => handleButtonClick('OPEN_WITHDRAW')}
-                    className="bg-gradient-to-r from-red-600 via-rose-600 to-pink-600 hover:from-red-500 hover:to-pink-500 active:scale-95 text-white font-extrabold py-2.5 px-2 rounded-xl text-xs shadow-md shadow-red-600/30 border border-red-400/40 transition-all flex items-center justify-center gap-1.5 truncate"
+                    className="bg-gradient-to-r from-red-600 via-rose-600 to-pink-600 hover:from-red-500 hover:to-rose-500 active:scale-95 text-white font-black py-3 px-2 rounded-xl text-xs shadow-lg shadow-red-600/40 border-2 border-red-300 transition-all flex items-center justify-center gap-1.5 truncate cursor-pointer"
                   >
-                    <span className="animate-bounce text-xs">👑</span>
-                    <span>💸 Withdraw (UPI)</span>
+                    <span className="text-base animate-pulse">🔴</span>
+                    <span>Withdraw (UPI)</span>
                   </button>
                 </div>
 
-                {/* 3rd Row: Refer & Earn (Amber/Gold) & My Balance (Purple) */}
+                {/* 3rd Row: Refer & Earn (Amber/Gold) & My Balance (Purple/Violet) */}
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     onClick={() => handleButtonClick('OPEN_REFER')}
-                    className="bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-600 hover:from-amber-400 hover:to-yellow-400 active:scale-95 text-slate-950 font-black py-2.5 px-2 rounded-xl text-xs shadow-md shadow-amber-500/30 border border-amber-200 transition-all flex items-center justify-center gap-1.5 truncate"
+                    className="bg-gradient-to-r from-amber-400 via-yellow-500 to-amber-500 hover:from-amber-300 hover:to-yellow-400 active:scale-95 text-slate-950 font-black py-3 px-2 rounded-xl text-xs shadow-lg shadow-amber-500/40 border-2 border-amber-200 transition-all flex items-center justify-center gap-1.5 truncate cursor-pointer"
                   >
-                    <span className="animate-pulse text-xs">🌟</span>
-                    <span>👥 Refer (10%)</span>
+                    <span className="animate-pulse text-sm">🌟</span>
+                    <span>👥 Refer & Earn (10%)</span>
                   </button>
 
                   <button
                     onClick={() => handleButtonClick('OPEN_HOME')}
-                    className="bg-gradient-to-r from-purple-600 via-fuchsia-600 to-purple-700 hover:from-purple-500 hover:to-fuchsia-500 active:scale-95 text-white font-extrabold py-2.5 px-2 rounded-xl text-xs shadow-md shadow-purple-600/30 border border-purple-400/40 transition-all flex items-center justify-center gap-1.5 truncate"
+                    className="bg-gradient-to-r from-purple-600 via-fuchsia-600 to-indigo-600 hover:from-purple-500 hover:to-fuchsia-500 active:scale-95 text-white font-black py-3 px-2 rounded-xl text-xs shadow-lg shadow-purple-600/40 border-2 border-purple-300 transition-all flex items-center justify-center gap-1.5 truncate cursor-pointer"
                   >
-                    <span className="text-xs">📊</span>
+                    <span className="text-sm">📊</span>
                     <span>My Balance</span>
                   </button>
                 </div>
@@ -239,9 +242,9 @@ export const BotSimulatorView: React.FC<BotSimulatorViewProps> = ({
                 {m.inlineButtons.find(b => b.action === 'OPEN_CHANNEL') && (
                   <button
                     onClick={() => handleButtonClick('OPEN_CHANNEL')}
-                    className="w-full bg-gradient-to-r from-sky-600 via-cyan-600 to-blue-600 hover:from-sky-500 hover:to-blue-500 active:scale-95 text-white font-extrabold py-2.5 px-3 rounded-xl text-xs shadow-md shadow-sky-500/30 border border-sky-300/40 transition-all flex items-center justify-center gap-2"
+                    className="w-full bg-gradient-to-r from-sky-500 via-cyan-600 to-blue-600 hover:from-sky-400 hover:to-blue-500 active:scale-95 text-white font-black py-3 px-3 rounded-xl text-xs shadow-lg shadow-sky-500/40 border-2 border-sky-300 transition-all flex items-center justify-center gap-2 cursor-pointer"
                   >
-                    <span className="text-xs">💬</span>
+                    <span className="text-sm">💬</span>
                     <span>Join VIP Fast Approvals Group</span>
                   </button>
                 )}

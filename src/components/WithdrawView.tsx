@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { User, SystemSettings, WithdrawalRequest, WithdrawalMethod } from '../types';
 import { getTelegramGroupLink, getTelegramGroupDisplay } from '../utils/telegram';
+import { LiveWithdrawalTicker } from './LiveWithdrawalTicker';
 import { Wallet, CreditCard, Building2, AlertCircle, CheckCircle2, Clock, ShieldCheck, Sparkles, Users, ExternalLink, Lock, XCircle, RefreshCw, Bell, AlertTriangle } from 'lucide-react';
 
 interface WithdrawViewProps {
@@ -617,6 +618,8 @@ export const WithdrawView: React.FC<WithdrawViewProps> = ({
           </div>
         )}
       </div>
+
+      <LiveWithdrawalTicker withdrawals={withdrawals} />
     </div>
   );
 };
